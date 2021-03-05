@@ -1,3 +1,6 @@
+mod config;
+mod utils;
+
 use actix_web::body::Body;
 use actix_web::middleware::Logger;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer};
@@ -6,7 +9,6 @@ use simplelog::{Config, TermLogger, TerminalMode};
 
 async fn hello(req: HttpRequest) -> HttpResponse {
     println!("hello {:?}", req);
-
     HttpResponse::Ok().message_body(Body::from("ello"))
 }
 
@@ -15,6 +17,9 @@ async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "actix_web=info");
     std::env::set_var("RUST_BACKTRACE", "1");
     TermLogger::init(LevelFilter::Info, Config::default(), TerminalMode::Mixed).unwrap();
+
+    let test_struct = config::load_config("config/proxy.yaml").unwrap();
+    println!("{:?}", test_struct);
 
     HttpServer::new(move || {
         App::new()

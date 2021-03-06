@@ -1,55 +1,72 @@
-use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
 
+use anyhow::Result;
+use log::error;
 use notify::{DebouncedEvent, RecursiveMode, watcher, Watcher};
 
-type Listener = Arc<Mutex<Vec<Box<dyn Notify + Sync + Send>>>>;
+type Listeners = Arc<Mutex<Vec<Box<dyn Notify + Sync + Send>>>>;
 
-pub trait Notify:  Sync + Send {
-    fn change_event(&mut self, e: DebouncedEvent);
-
-    fn path(&self) -> &Path;
+pub trait Notify: Sync + Send {
+    fn change_event(&self, e: &DebouncedEvent);
 }
 
 pub struct FileWatcher {
     path: PathBuf,
-    listeners: Listener,
+    listeners: Listeners,
 }
 
 impl FileWatcher {
-    pub fn new<P>(path: P) -> Self
+    pub fn new<P>(base_path: P) -> Self
         where
-            P: Into<PathBuf>
+            P: Into<PathBuf>,
     {
         FileWatcher {
-            path: path.into(),
-            listeners: Arc::new(
-                Mutex::new(vec![])),
+            path: base_path.into(),
+            listeners: Arc::new(Mutex::new(vec![])),
         }
     }
 
     pub fn register_listener(&mut self, listener: Box<dyn Notify + Sync + Send>) {
-        self.listeners.lock().unwrap().push(listener);
+        self.listeners
+            .lock()
+            .expect("listener mutex poisoned!")
+            .push(listener);
     }
 
-    pub fn watch(&self) {
+    pub fn watch(&self) -> Result<()> {
         let path = self.path.clone();
+        let listeners = self.listeners.clone();
         thread::Builder::new()
             .name("file-watch-thread".into())
-            .spawn(move || {
+            .spawn(move || -> Result<()> {
                 let (tx, rx) = channel();
-                let mut watcher = watcher(tx, Duration::from_secs(2)).unwrap();
-                watcher.watch(path, RecursiveMode::NonRecursive).unwrap();
+                let mut watcher = watcher(tx, Duration::from_secs(5))?;
+                watcher.watch(path, RecursiveMode::NonRecursive)?;
 
-                for e in rx {
-                    println!("events {:?}", e);
+                loop {
+                    match rx.recv() {
+                        Ok(event) => match event {
+                            DebouncedEvent::Write(_) => {
+                                listeners
+                                    .lock()
+                                    .expect("listener mutex poisoned!")
+                                    .iter_mut()
+                                    .for_each(|l| l.change_event(&event));
+                            }
+                            _ => {}
+                        },
+                        Err(e) => {
+                            error!("Error receiving file events - stopping file watch! {}", e);
+                            break;
+                        }
+                    }
                 }
-            })
-            .expect("Failed to register receiver thread");
+                Ok(())
+            })?;
+        Ok(())
     }
 }
-

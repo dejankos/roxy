@@ -1,14 +1,14 @@
 mod config;
-mod utils;
 mod file_watcher;
+mod utils;
 
 use crate::config::Configuration;
+use crate::file_watcher::FileWatcher;
 use actix_web::body::Body;
 use actix_web::middleware::Logger;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer};
 use log::LevelFilter;
 use simplelog::{Config, TermLogger, TerminalMode};
-use crate::file_watcher::FileWatcher;
 
 async fn hello(req: HttpRequest) -> HttpResponse {
     println!("hello {:?}", req);
@@ -23,7 +23,8 @@ async fn main() -> std::io::Result<()> {
 
     let configuration = Configuration::new("config/proxy.yaml");
 
-    let watcher = FileWatcher::new("config/proxy.yaml");
+    let mut watcher = FileWatcher::new("config/proxy.yaml");
+    watcher.register_listener(Box::new(configuration));
     watcher.watch();
 
     HttpServer::new(move || {

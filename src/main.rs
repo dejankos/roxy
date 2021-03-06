@@ -1,11 +1,14 @@
 mod config;
 mod utils;
+mod file_watcher;
 
+use crate::config::Configuration;
 use actix_web::body::Body;
 use actix_web::middleware::Logger;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer};
 use log::LevelFilter;
 use simplelog::{Config, TermLogger, TerminalMode};
+use crate::file_watcher::FileWatcher;
 
 async fn hello(req: HttpRequest) -> HttpResponse {
     println!("hello {:?}", req);
@@ -18,8 +21,10 @@ async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_BACKTRACE", "1");
     TermLogger::init(LevelFilter::Info, Config::default(), TerminalMode::Mixed).unwrap();
 
-    let test_struct = config::load_config("config/proxy.yaml").unwrap();
-    println!("{:?}", test_struct);
+    let configuration = Configuration::new("config/proxy.yaml");
+
+    let watcher = FileWatcher::new("config/proxy.yaml");
+    watcher.watch();
 
     HttpServer::new(move || {
         App::new()

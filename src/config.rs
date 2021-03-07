@@ -2,24 +2,29 @@ use std::fs::File;
 use std::path::PathBuf;
 
 use anyhow::Result;
+use crossbeam::sync::{ShardedLock, ShardedLockReadGuard, ShardedLockWriteGuard};
+use log::error;
 use notify::{watcher, DebouncedEvent, RecursiveMode, Watcher};
 use serde::Deserialize;
 
-use crate::file_watcher::Notify;
+use crate::file_watcher::FileListener;
 
 #[derive(Debug, Deserialize)]
-struct ProxyConfig {
+struct ProxyProperties {
     test: u8,
 }
 
-pub struct Configuration {
-    path: PathBuf,
-    proxy_config: ProxyConfig,
+struct ProxyConfig {
+    props: ProxyProperties,
 }
 
-impl Notify for Configuration {
-    fn change_event(&self, e: &DebouncedEvent) {
-        println!("received event {:?}", e);
+pub struct Configuration {
+    proxy_config: ShardedLock<ProxyConfig>,
+}
+
+impl FileListener for Configuration {
+    fn notify_file_changed(&self, path: &PathBuf) {
+        self.reload_config(path);
     }
 }
 
@@ -29,18 +34,30 @@ impl Configuration {
         P: Into<PathBuf>,
     {
         let pa = p.into();
-        let config_file = File::open(&pa).unwrap();
-        let proxy_config = load_config(&config_file).unwrap();
-        let path = PathBuf::from(pa);
+        let props = load_properties(&pa).unwrap();
 
-        let config = Configuration { path, proxy_config };
+        let config = Configuration {
+            proxy_config: ShardedLock::new(ProxyConfig { props }),
+        };
 
-        let _path = config.path.clone();
-        println!("registering thread");
         config
+    }
+
+    fn reload_config(&self, path: &PathBuf) {
+        match load_properties(path) {
+            Ok(props) => {
+                self.proxy_config
+                    .write()
+                    .expect("proxy config write lock poisoned!")
+                    .props = props;
+            }
+            Err(e) => {
+                error!("Error reloading proxy config. Err = {}", e);
+            }
+        }
     }
 }
 
-fn load_config(file: &File) -> Result<ProxyConfig> {
-    Ok(serde_yaml::from_reader(file)?)
+fn load_properties(path: &PathBuf) -> Result<ProxyProperties> {
+    Ok(serde_yaml::from_reader(File::open(path)?)?)
 }

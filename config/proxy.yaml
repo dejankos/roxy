@@ -1,1 +1,13 @@
 test: 1
+
+groups:
+  - path: /abc/*
+    outbound: server_rack_1
+  - path: /cde/*
+    outbound: server_rack_2
+
+outbounds:
+  - rack: server_rack_1
+    servers:
+      - 127.0.0.1:8080
+      - localhost:8181

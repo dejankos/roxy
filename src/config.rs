@@ -3,8 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use crossbeam::sync::ShardedLock;
-use log::{debug, error, info};
-use notify::Watcher;
+use log::{debug, error};
 use serde::Deserialize;
 
 use crate::file_watcher::FileListener;
@@ -14,6 +13,20 @@ const CONFIG_FILE: &str = "proxy.yaml";
 #[derive(Debug, Deserialize)]
 struct ProxyProperties {
     test: u8,
+    groups: Vec<Group>,
+    outbounds: Vec<Rack>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Group {
+    path: String,
+    outbound: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct Rack {
+    rack: String,
+    servers: Vec<String>,
 }
 
 struct ProxyConfig {
@@ -39,7 +52,7 @@ impl FileName for &PathBuf {
 
 impl FileListener for Configuration {
     fn notify_file_changed(&self, path: &PathBuf) {
-        if !self.is_for_me(path.file_name_to_str()) {
+        if !self.interested(path.file_name_to_str()) {
             return;
         }
 
@@ -54,12 +67,13 @@ impl Configuration {
         P: AsRef<Path>,
     {
         let props = load_properties(&path)?;
+        debug!("Loaded props {:?}", &props);
         Ok(Configuration {
             proxy_config: ShardedLock::new(ProxyConfig { props }),
         })
     }
 
-    fn is_for_me(&self, file_name: &str) -> bool {
+    fn interested(&self, file_name: &str) -> bool {
         CONFIG_FILE == file_name
     }
 

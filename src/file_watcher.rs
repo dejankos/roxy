@@ -59,16 +59,17 @@ fn run_event_loop(path: &Path, listeners: Listeners) -> Result<()> {
 
     loop {
         match rx.recv() {
-            Ok(event) => {
-                if let DebouncedEvent::Write(ref p) = event {
-                    listeners
-                        .lock()
-                        .expect("listener mutex poisoned!")
-                        .iter()
-                        .for_each(|l| l.notify_file_changed(p));
+            Ok(event) => match event {
+                DebouncedEvent::Write(ref p) => listeners
+                    .lock()
+                    .expect("listener mutex poisoned!")
+                    .iter()
+                    .for_each(|l| l.notify_file_changed(p)),
+                DebouncedEvent::Error(e, o) => {
+                    error!("Path {:?} watch error {}.", o, e);
                 }
-                //TODO watch errors ?
-            }
+                _ => {}
+            },
             Err(e) => {
                 error!("Error receiving file events - stopping file watch! {}", e);
                 break;

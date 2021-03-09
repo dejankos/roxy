@@ -22,10 +22,9 @@ async fn hello(req: HttpRequest) -> HttpResponse {
 async fn main() -> Result<()> {
     std::env::set_var("RUST_LOG", "actix_web=info");
     std::env::set_var("RUST_BACKTRACE", "1");
-    TermLogger::init(LevelFilter::Info, Config::default(), TerminalMode::Mixed).unwrap();
+    TermLogger::init(LevelFilter::Debug, Config::default(), TerminalMode::Mixed).unwrap(); // fixme only for dev
 
-    let configuration = Configuration::new("config/proxy.yaml");
-
+    let configuration = Configuration::new("config/proxy.yaml")?;
     let mut watcher = FileWatcher::new("config/proxy.yaml");
     watcher.register_listener(Box::new(configuration));
     watcher.watch_file_changes()?;

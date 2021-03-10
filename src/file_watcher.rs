@@ -1,6 +1,7 @@
+use crossbeam::sync::ShardedLock;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -9,7 +10,7 @@ use log::error;
 use notify::{watcher, DebouncedEvent, RecursiveMode, Watcher};
 
 type Listener = Box<dyn FileListener + Sync + Send>;
-type Listeners = Arc<Mutex<Vec<Listener>>>;
+type Listeners = Arc<ShardedLock<Vec<Listener>>>;
 
 pub trait FileListener: Sync + Send {
     fn notify_file_changed(&self, path: &PathBuf);
@@ -27,13 +28,13 @@ impl FileWatcher {
     {
         FileWatcher {
             path: base_path.into(),
-            listeners: Arc::new(Mutex::new(vec![])),
+            listeners: Arc::new(ShardedLock::new(vec![])),
         }
     }
 
-    pub fn register_listener(&mut self, listener: Listener) {
+    pub fn register_listener(&self, listener: Listener) {
         self.listeners
-            .lock()
+            .write()
             .expect("listener mutex poisoned!")
             .push(listener);
     }
@@ -61,7 +62,7 @@ fn run_event_loop(path: &Path, listeners: Listeners) -> Result<()> {
         match rx.recv() {
             Ok(event) => match event {
                 DebouncedEvent::Write(ref p) => listeners
-                    .lock()
+                    .read()
                     .expect("listener mutex poisoned!")
                     .iter()
                     .for_each(|l| l.notify_file_changed(p)),

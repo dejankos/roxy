@@ -9,8 +9,10 @@ use simplelog::{Config, TermLogger, TerminalMode};
 use crate::config::Configuration;
 use crate::file_watcher::FileWatcher;
 
+mod balancer;
 mod config;
 mod file_watcher;
+mod proxy;
 mod utils;
 
 async fn hello(req: HttpRequest) -> HttpResponse {
@@ -25,7 +27,7 @@ async fn main() -> Result<()> {
     TermLogger::init(LevelFilter::Debug, Config::default(), TerminalMode::Mixed).unwrap(); // fixme only for dev
 
     let configuration = Configuration::new("config/proxy.yaml")?;
-    let mut watcher = FileWatcher::new("config/proxy.yaml");
+    let watcher = FileWatcher::new("config/proxy.yaml");
     watcher.register_listener(Box::new(configuration));
     watcher.watch_file_changes()?;
 

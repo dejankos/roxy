@@ -12,20 +12,19 @@ const CONFIG_FILE: &str = "proxy.yaml";
 
 #[derive(Debug, Deserialize)]
 struct ProxyProperties {
-    test: u8,
-    groups: Vec<Group>,
-    outbounds: Vec<Rack>,
+    inbound: Vec<Inbound>,
+    outbound: Vec<Outbound>,
 }
 
 #[derive(Debug, Deserialize)]
-struct Group {
+struct Inbound {
     path: String,
-    outbound: String,
+    group: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct Rack {
-    rack: String,
+struct Outbound {
+    group: String,
     servers: Vec<String>,
 }
 

@@ -1,20 +1,25 @@
 use crate::config::Configuration;
+use actix_web::dev::Url;
 use actix_web::HttpRequest;
+use async_trait::async_trait;
 
-trait Balancer {
-    fn balance(&self, req: &HttpRequest) -> Instance;
-}
-
-struct Instance {
-    server: String,
-}
-
-struct RoundRobin {
+pub struct Balancer {
     config: Configuration,
 }
 
-impl Balancer for RoundRobin {
-    fn balance(&self, req: &HttpRequest) -> Instance {
-        unimplemented!()
+#[derive(Debug)]
+pub struct Instance {
+    pub address: String,
+}
+
+impl Balancer {
+    pub fn new(config: Configuration) -> Self {
+        Balancer { config }
+    }
+
+    pub async fn balance(&self, req: &HttpRequest) -> Instance {
+        Instance {
+            address: "http://127.0.0.1:8080/push".into(),
+        }
     }
 }

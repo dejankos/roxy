@@ -2,9 +2,10 @@ use crate::config::Configuration;
 use actix_web::dev::Url;
 use actix_web::HttpRequest;
 use async_trait::async_trait;
+use std::sync::Arc;
 
 pub struct Balancer {
-    config: Configuration,
+    config: Arc<Configuration>,
 }
 
 #[derive(Debug)]
@@ -13,7 +14,7 @@ pub struct Instance {
 }
 
 impl Balancer {
-    pub fn new(config: Configuration) -> Self {
+    pub fn new(config: Arc<Configuration>) -> Self {
         Balancer { config }
     }
 

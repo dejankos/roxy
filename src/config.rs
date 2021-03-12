@@ -7,6 +7,9 @@ use log::{debug, error};
 use serde::Deserialize;
 
 use crate::file_watcher::FileListener;
+use std::sync::Arc;
+use std::collections::HashMap;
+use regex::Regex;
 
 const CONFIG_FILE: &str = "proxy.yaml";
 
@@ -34,6 +37,8 @@ struct ProxyConfig {
 
 pub struct Configuration {
     proxy_config: ShardedLock<ProxyConfig>,
+    // path_matchers: ShardedLock<Vec<(Regex, String)>>
+
 }
 
 trait FileName {
@@ -49,7 +54,7 @@ impl FileName for &PathBuf {
     }
 }
 
-impl FileListener for Configuration {
+impl FileListener for Arc<Configuration> {
     fn notify_file_changed(&self, path: &PathBuf) {
         if !self.interested(path.file_name_to_str()) {
             return;
@@ -79,6 +84,14 @@ impl Configuration {
     fn reload_config(&self, path: &PathBuf) {
         match load_properties(path) {
             Ok(props) => {
+                debug!(
+                    "Reloading properties:\n old: {:?} \n new: {:?}",
+                    self.proxy_config
+                        .read()
+                        .expect("proxy config read lock poisoned!")
+                        .props,
+                    &props
+                );
                 self.proxy_config
                     .write()
                     .expect("proxy config write lock poisoned!")
@@ -96,4 +109,12 @@ where
     P: AsRef<Path>,
 {
     Ok(serde_yaml::from_reader(File::open(path)?)?)
+}
+
+
+// fn create_path_matchers(props:&ProxyProperties) -> Vec<(Regex, String)> {
+//     props.inbound.iter()
+//         .map(|i| {
+//                Regex::new()
+//         })
 }

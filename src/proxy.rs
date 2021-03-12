@@ -20,7 +20,7 @@ impl Proxy {
         Proxy { balancer }
     }
 
-    pub async fn proxy(&self, req: HttpRequest, body: web::Bytes) -> Result<HttpResponse, Error> {
+    pub async fn proxy(&self, req: HttpRequest, body: web::Bytes) -> Result<HttpResponse> {
         let instance = self.balancer.balance(&req).await;
 
         info!("will proxy to {:?}", &instance);
@@ -29,14 +29,14 @@ impl Proxy {
 
         let full_address = format!("{}{}?{}", instance.address, x, x1);
 
-        let uri = Uri::try_from(full_address).unwrap();
+        let uri = Uri::try_from(full_address)?;
 
         let mut client = Client::new();
         let mut response = client
             .request_from(uri, req.head())
             .send_body(body)
             .await
-            .map_err(actix_web::Error::from)?;
+            .map_err(|e| anyhow!("error {}", e))?;
 
         let mut client_resp = HttpResponse::build(response.status());
         // Remove `Connection` as per

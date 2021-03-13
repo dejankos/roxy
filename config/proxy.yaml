@@ -7,9 +7,9 @@ inbound:
 outbound:
   - group: group_1
     servers:
-      - 127.0.0.1:8080
-      - localhost:8181
+      - http://127.0.0.1:8080
+      - http://localhost:8182
   - group: group_2
     servers:
-      - test:8080
-      - test2:8181
+      - http://test:8082
+      - http://test2:8181/test

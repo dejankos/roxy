@@ -1,6 +1,5 @@
-use actix_web::body::Body;
 use actix_web::middleware::Logger;
-use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer, ResponseError};
+use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, ResponseError};
 use anyhow::anyhow;
 use log::LevelFilter;
 use simplelog::{Config, TermLogger, TerminalMode};
@@ -11,7 +10,7 @@ use crate::file_watcher::FileWatcher;
 use crate::proxy::Proxy;
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use std::future::Future;
+
 use std::sync::Arc;
 
 mod balancer;

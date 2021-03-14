@@ -1,18 +1,17 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::ops::Deref;
+
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
+
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Result;
 use crossbeam::sync::ShardedLock;
 use crossbeam::sync::ShardedLockWriteGuard;
-use log::info;
+
 use log::{debug, error};
-use notify::Op;
+
 use regex::Regex;
 use serde::Deserialize;
 use url::Url;
@@ -50,8 +49,9 @@ pub struct Configuration {
 }
 
 #[derive(Debug, Clone)]
-struct Group {
-    servers: Vec<Url>,
+pub struct Group {
+    pub servers: Vec<Url>,
+    pub name: Arc<str>,
 }
 
 trait FileName {
@@ -110,14 +110,14 @@ impl Configuration {
         }
     }
 
-    pub fn find_match_group(&self, req_path: &str) -> Option<(Regex, Option<Group>)> {
+    fn find_match_group(&self, req_path: &str) -> Option<(Regex, Option<Group>)> {
         self.proxy_config
             .read()
             .expect("proxy config read lock poisoned!")
             .path_matchers
             .iter()
             .cloned()
-            .find(|(r, g)| r.is_match(req_path))
+            .find(|(r, _g)| r.is_match(req_path))
     }
 
     fn interested(&self, file_name: &str) -> bool {
@@ -178,8 +178,8 @@ fn create_path_matchers(props: &ProxyProperties) -> Result<Vec<(Regex, Option<Gr
     let lookup = props
         .outbound
         .iter()
-        .map(|o| (&o.group, &o.servers))
-        .collect::<HashMap<&String, &Vec<String>>>();
+        .map(|o| (o.group.as_str(), &o.servers))
+        .collect();
 
     props
         .inbound
@@ -193,8 +193,8 @@ fn create_path_matchers(props: &ProxyProperties) -> Result<Vec<(Regex, Option<Gr
         .collect()
 }
 
-fn convert_to_group(group: &String, h_map: &HashMap<&String, &Vec<String>>) -> Option<Group> {
-    let mut value = h_map.get(group);
+fn convert_to_group(group: &str, lookup: &HashMap<&str, &Vec<String>>) -> Option<Group> {
+    let mut value = lookup.get(group);
     if let Some(values) = value.take() {
         let servers = values
             .into_iter()
@@ -211,7 +211,10 @@ fn convert_to_group(group: &String, h_map: &HashMap<&String, &Vec<String>>) -> O
         if servers.is_empty() {
             None
         } else {
-            Some(Group { servers })
+            Some(Group {
+                servers,
+                name: Arc::from(group),
+            })
         }
     } else {
         None

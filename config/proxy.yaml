@@ -7,8 +7,8 @@ inbound:
 outbound:
   - group: group_1
     servers:
-      - http://127.0.0.1:8080
-      - http://localhost:8182
+      - http://127.0.0.1:8080/push
+      - http://localhost:8080/push
   - group: group_2
     servers:
       - http://test:8082

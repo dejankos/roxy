@@ -42,11 +42,19 @@ impl Balancer {
             .write()
             .expect("distributions write lock poisoned!");
         if let Some(v) = write_lock.get_mut(&group_name) {
-            *v += 1;
+            *v = self.next(*v);
             *v
         } else {
             write_lock.insert(group_name, 1);
             1
+        }
+    }
+
+    fn next(&self, c: usize) -> usize {
+        if c == usize::max_value() {
+            1
+        } else {
+            c + 1
         }
     }
 }

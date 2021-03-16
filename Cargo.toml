@@ -10,7 +10,10 @@ exclude = [".gitignore"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-actix-web = "3"
+actix-web =  { version = "3", features = ["openssl"] }
+openssl = "0.10"
+awc = "2.0.3"
+
 simplelog = "0.7.6"
 log = "0.4.8"
 anyhow = "1"

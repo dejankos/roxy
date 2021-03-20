@@ -1,16 +1,15 @@
 use std::convert::TryFrom;
-use std::str::FromStr;
 use std::time::Duration;
 
 use actix_web::http::Uri;
 use actix_web::{web, HttpRequest, HttpResponse};
 use anyhow::anyhow;
 use anyhow::Result;
-use awc::{http, Connector};
+use awc::Connector;
 use awc::{Client, ClientRequest};
 use log::debug;
 use log::error;
-use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
+use openssl::ssl::{SslConnector, SslMethod};
 use url::Url;
 
 use crate::balancer::Balancer;
@@ -24,6 +23,8 @@ pub struct Proxy {
 
 trait ProxyHeaders {
     fn append_proxy_headers(self, req_from: &HttpRequest) -> Self;
+
+    fn clear_headers(self) -> Self;
 }
 
 trait RequestHeaders {
@@ -76,6 +77,11 @@ impl ProxyHeaders for ClientRequest {
 
         self.set_header(XFF_HEADER_NAME, xff_value)
     }
+
+    fn clear_headers(mut self) -> Self {
+        self.headers_mut().remove("Connection");
+        self
+    }
 }
 
 impl Proxy {
@@ -92,21 +98,12 @@ impl Proxy {
         let mut response = create_http_client(scheme.as_str(), Duration::from_secs(100))? // todo add to config per endpoint
             .request_from(proxy_uri, req.head())
             .append_proxy_headers(&req)
+            .clear_headers()
             .send_body(body)
             .await
             .map_err(|e| anyhow!("http proxy error {}", e))?;
 
         let mut client_resp = HttpResponse::build(response.status());
-        // Remove `Connection` as per
-        // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Connection#Directives
-        // for (header_name, header_value) in response
-        //     .headers()
-        //     .iter()
-        //     .filter(|(h, _)| *h != "connection")
-        // {
-        //     client_resp.header(header_name.clone(), header_value.clone());
-        // }
-
         Ok(client_resp.body(response.body().await?))
     }
 }
@@ -123,7 +120,7 @@ fn create_proxy_uri(url: Url, path: &str, query_string: &str) -> Result<Uri> {
 
 fn create_http_client(scheme: &str, timeout: Duration) -> Result<Client> {
     if scheme == "https" {
-        let mut ssl_connector = SslConnector::builder(SslMethod::tls())?.build();
+        let ssl_connector = SslConnector::builder(SslMethod::tls())?.build();
         let connector = Connector::new()
             .ssl(ssl_connector)
             .timeout(timeout)
@@ -140,7 +137,7 @@ fn create_http_client(scheme: &str, timeout: Duration) -> Result<Client> {
 
 #[cfg(test)]
 mod tests {
-    use url::{Host, Url};
+    use url::Url;
 
     use crate::proxy::create_proxy_uri;
 

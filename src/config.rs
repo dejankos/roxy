@@ -197,9 +197,9 @@ fn convert_to_group(group: &str, lookup: &HashMap<&str, &Vec<String>>) -> Option
     let mut value = lookup.get(group);
     if let Some(values) = value.take() {
         let servers = values
-            .into_iter()
+            .iter()
             .filter_map(|v| {
-                if let Some(url) = Url::parse(v).ok() {
+                if let Ok(url) = Url::parse(v) {
                     Some(url)
                 } else {
                     error!("Error parsing configuration url {} for group {}", v, group);

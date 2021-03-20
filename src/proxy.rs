@@ -5,9 +5,10 @@ use actix_web::http::Uri;
 use actix_web::{web, HttpRequest, HttpResponse};
 use anyhow::anyhow;
 use anyhow::Result;
-use awc::Client;
-use awc::Connector;
+use awc::{http, Connector};
+use awc::{Client, ClientRequest};
 use log::debug;
+use log::error;
 use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
 use url::Url;
 
@@ -15,6 +16,47 @@ use crate::balancer::Balancer;
 
 pub struct Proxy {
     balancer: Balancer,
+}
+
+trait ProxyHeaders {
+    fn append_proxy_headers(self, req_from: &HttpRequest) -> Self;
+}
+
+trait RequestHeaders {
+    fn get_header_value(&self, name: &str) -> Option<&str>;
+}
+
+impl RequestHeaders for HttpRequest {
+    fn get_header_value(&self, name: &str) -> Option<&str> {
+        if let Some(value) = self.headers().get(name) {
+            match value.to_str() {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    error!("Error reading header {}, e {}", name, e);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    }
+}
+
+impl ProxyHeaders for ClientRequest {
+    fn append_proxy_headers(self, req_from: &HttpRequest) -> Self {
+        let xff = req_from.get_header_value("X-Forwarded-For");
+        let xfh = req_from.get_header_value("X-Forwarded-Host");
+        let xfp = req_from.get_header_value("X-Forwarded-Proto");
+
+        if let Some(v) = xff {
+            self.set_header(
+                "X-Forwarded-For",
+                format!("{}, {}", v, req_from.connection_info().host()),
+            )
+        } else {
+            self.set_header("X-Forwarded-For", req_from.connection_info().host())
+        }
+    }
 }
 
 impl Proxy {
@@ -30,7 +72,7 @@ impl Proxy {
         debug!("proxying to {}", &proxy_uri);
         let mut response = create_http_client(scheme.as_str(), Duration::from_secs(100))? // todo add to config per endpoint
             .request_from(proxy_uri, req.head())
-            //todo add proxy headers
+            .append_proxy_headers(&req)
             .send_body(body)
             .await
             .map_err(|e| anyhow!("http proxy error {}", e))?;

@@ -6,6 +6,7 @@ inbound:
 
 outbound:
   - group: group_1
+    timeout: 60
     servers:
       - http://localhost:8080/push
   - group: group_2

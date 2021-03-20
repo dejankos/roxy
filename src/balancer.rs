@@ -8,6 +8,7 @@ use anyhow::Result;
 use crossbeam::sync::ShardedLock;
 
 use crate::config::Configuration;
+use std::time::Duration;
 use url::Url;
 
 pub struct Balancer {
@@ -17,7 +18,8 @@ pub struct Balancer {
 
 #[derive(Debug)]
 pub struct Instance {
-    pub address: String,
+    pub url: Url,
+    pub timeout: Duration,
 }
 
 impl Balancer {
@@ -29,11 +31,16 @@ impl Balancer {
         }
     }
 
-    pub async fn balance(&self, req: &HttpRequest) -> Result<Url> {
+    pub async fn balance(&self, req: &HttpRequest) -> Result<Instance> {
         let mut group = self.config.find_group(req.path())?;
         let count = self.current_count(group.name);
         let len = group.servers.len();
-        Ok(group.servers.remove(count.rem_euclid(len)))
+        let url = group.servers.remove(count.rem_euclid(len));
+
+        Ok(Instance {
+            url,
+            timeout: group.timeout,
+        })
     }
 
     fn current_count(&self, group_name: Arc<str>) -> usize {

@@ -17,6 +17,7 @@ use serde::Deserialize;
 use url::Url;
 
 use crate::file_watcher::FileListener;
+use std::time::Duration;
 
 const CONFIG_FILE: &str = "proxy.yaml";
 
@@ -34,6 +35,7 @@ struct Inbound {
 
 #[derive(Debug, Deserialize)]
 struct Outbound {
+    timeout: Option<u64>,
     group: String,
     servers: Vec<String>,
 }
@@ -52,6 +54,7 @@ pub struct Configuration {
 pub struct Group {
     pub servers: Vec<Url>,
     pub name: Arc<str>,
+    pub timeout: Duration,
 }
 
 trait FileName {
@@ -178,7 +181,7 @@ fn create_path_matchers(props: &ProxyProperties) -> Result<Vec<(Regex, Option<Gr
     let lookup = props
         .outbound
         .iter()
-        .map(|o| (o.group.as_str(), &o.servers))
+        .map(|o| (o.group.as_str(), o))
         .collect();
 
     props
@@ -193,10 +196,11 @@ fn create_path_matchers(props: &ProxyProperties) -> Result<Vec<(Regex, Option<Gr
         .collect()
 }
 
-fn convert_to_group(group: &str, lookup: &HashMap<&str, &Vec<String>>) -> Option<Group> {
+fn convert_to_group(group: &str, lookup: &HashMap<&str, &Outbound>) -> Option<Group> {
     let mut value = lookup.get(group);
-    if let Some(values) = value.take() {
-        let servers = values
+    if let Some(outbound) = value.take() {
+        let servers = outbound
+            .servers
             .iter()
             .filter_map(|v| {
                 if let Ok(url) = Url::parse(v) {
@@ -211,9 +215,14 @@ fn convert_to_group(group: &str, lookup: &HashMap<&str, &Vec<String>>) -> Option
         if servers.is_empty() {
             None
         } else {
+            let timeout = outbound
+                .timeout
+                .map_or_else(|| Duration::from_secs(60), |t| Duration::from_secs(t));
+            let name = Arc::from(group);
             Some(Group {
                 servers,
-                name: Arc::from(group),
+                name,
+                timeout,
             })
         }
     } else {

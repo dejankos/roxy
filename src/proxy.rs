@@ -90,12 +90,12 @@ impl Proxy {
     }
 
     pub async fn proxy(&self, req: HttpRequest, body: web::Bytes) -> Result<HttpResponse> {
-        let instance_url = self.balancer.balance(&req).await?;
-        let scheme = String::from(instance_url.scheme());
-        let proxy_uri = create_proxy_uri(instance_url, req.path(), req.query_string())?;
+        let instance = self.balancer.balance(&req).await?;
+        let scheme = instance.url.scheme().to_owned();
+        let proxy_uri = create_proxy_uri(instance.url, req.path(), req.query_string())?;
 
         debug!("proxying to {}", &proxy_uri);
-        let mut response = create_http_client(scheme.as_str(), Duration::from_secs(100))? // todo add to config per endpoint
+        let mut response = create_http_client(scheme.as_str(), instance.timeout)?
             .request_from(proxy_uri, req.head())
             .append_proxy_headers(&req)
             .clear_headers()

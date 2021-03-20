@@ -1,5 +1,5 @@
 inbound:
-  - path: /todos/*
+  - path: /abc/*
     group: group_1
   - path: /cde/*
     group: group_2
@@ -7,7 +7,7 @@ inbound:
 outbound:
   - group: group_1
     servers:
-      - https://jsonplaceholder.typicode.com
+      - http://localhost:8080/push
   - group: group_2
     servers:
       - http://test:8082

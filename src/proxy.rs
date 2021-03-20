@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::str::FromStr;
 use std::time::Duration;
 
 use actix_web::http::Uri;
@@ -14,6 +15,9 @@ use url::Url;
 
 use crate::balancer::Balancer;
 
+const XFF_HEADER_NAME: &str = "X-Forwarded-For";
+const EMPTY: &str = "";
+
 pub struct Proxy {
     balancer: Balancer,
 }
@@ -24,6 +28,10 @@ trait ProxyHeaders {
 
 trait RequestHeaders {
     fn get_header_value(&self, name: &str) -> Option<&str>;
+
+    fn xff(&self) -> Option<&str>;
+
+    fn host(&self) -> String;
 }
 
 impl RequestHeaders for HttpRequest {
@@ -40,22 +48,33 @@ impl RequestHeaders for HttpRequest {
             None
         }
     }
+
+    fn xff(&self) -> Option<&str> {
+        self.get_header_value(XFF_HEADER_NAME)
+    }
+
+    fn host(&self) -> String {
+        let conn_info = self.connection_info();
+        let host = conn_info.host();
+        if let Some(idx) = host.find(':') {
+            host[..idx].into()
+        } else {
+            EMPTY.into()
+        }
+    }
 }
 
 impl ProxyHeaders for ClientRequest {
     fn append_proxy_headers(self, req_from: &HttpRequest) -> Self {
-        let xff = req_from.get_header_value("X-Forwarded-For");
-        let xfh = req_from.get_header_value("X-Forwarded-Host");
-        let xfp = req_from.get_header_value("X-Forwarded-Proto");
-
-        if let Some(v) = xff {
-            self.set_header(
-                "X-Forwarded-For",
-                format!("{}, {}", v, req_from.connection_info().host()),
-            )
-        } else {
-            self.set_header("X-Forwarded-For", req_from.connection_info().host())
+        let xff = req_from.xff();
+        let mut xff_value = String::new();
+        if let Some(xff) = xff {
+            xff_value.push_str(xff);
+            xff_value.push_str(", ");
         }
+        xff_value.push_str(req_from.host().as_str());
+
+        self.set_header(XFF_HEADER_NAME, xff_value)
     }
 }
 
@@ -121,7 +140,7 @@ fn create_http_client(scheme: &str, timeout: Duration) -> Result<Client> {
 
 #[cfg(test)]
 mod tests {
-    use url::Url;
+    use url::{Host, Url};
 
     use crate::proxy::create_proxy_uri;
 

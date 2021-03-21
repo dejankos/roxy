@@ -20,6 +20,7 @@ use crate::file_watcher::FileListener;
 use std::time::Duration;
 
 const CONFIG_FILE: &str = "proxy.yaml";
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Deserialize)]
 struct ProxyProperties {
@@ -217,7 +218,7 @@ fn convert_to_group(group: &str, lookup: &HashMap<&str, &Outbound>) -> Option<Gr
         } else {
             let timeout = outbound
                 .timeout
-                .map_or_else(|| Duration::from_secs(60), |t| Duration::from_secs(t));
+                .map_or(DEFAULT_TIMEOUT, Duration::from_secs);
             let name = Arc::from(group);
             Some(Group {
                 servers,

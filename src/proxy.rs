@@ -15,6 +15,7 @@ use url::Url;
 use crate::balancer::Balancer;
 
 const XFF_HEADER_NAME: &str = "X-Forwarded-For";
+const HTTPS_SCHEME: &str = "https";
 const EMPTY: &str = "";
 
 pub struct Proxy {
@@ -119,7 +120,7 @@ fn create_proxy_uri(url: Url, path: &str, query_string: &str) -> Result<Uri> {
 }
 
 fn create_http_client(scheme: &str, timeout: Duration) -> Result<Client> {
-    if scheme == "https" {
+    if scheme == HTTPS_SCHEME {
         let ssl_connector = SslConnector::builder(SslMethod::tls())?.build();
         let connector = Connector::new()
             .ssl(ssl_connector)

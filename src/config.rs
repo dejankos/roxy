@@ -6,7 +6,6 @@ use std::time::Duration;
 use anyhow::bail;
 use anyhow::Result;
 use crossbeam::sync::ShardedLock;
-
 use log::{debug, error};
 use regex::Regex;
 use serde::Deserialize;
@@ -132,11 +131,6 @@ impl Configuration {
                     &props
                 );
 
-                let mut write_lock = self
-                    .proxy_config
-                    .write()
-                    .expect("proxy config write lock poisoned!");
-
                 match self
                     .matchers
                     .write()
@@ -145,7 +139,10 @@ impl Configuration {
                 {
                     Ok(_) => {
                         debug!("Reloaded properties {:?}", &props);
-                        write_lock.props = props;
+                        self.proxy_config
+                            .write()
+                            .expect("proxy config write lock poisoned!")
+                            .props = props;
                     }
                     Err(e) => {
                         error!("Error reloading proxy config. Err = {}", e);

@@ -1,3 +1,7 @@
+use std::fmt;
+use std::fmt::{Display, Formatter};
+use std::sync::Arc;
+
 use actix_web::middleware::Logger;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, ResponseError};
 use anyhow::anyhow;
@@ -8,18 +12,16 @@ use crate::balancer::Balancer;
 use crate::config::Configuration;
 use crate::file_watcher::FileWatcher;
 use crate::proxy::Proxy;
-use std::fmt;
-use std::fmt::{Display, Formatter};
-
-use std::sync::Arc;
 
 mod balancer;
 mod config;
 mod file_watcher;
+mod matcher;
 mod proxy;
 mod utils;
 
 type Response<T> = Result<T, ErrWrapper>;
+
 #[derive(Debug)]
 pub struct ErrWrapper {
     pub err: anyhow::Error,

@@ -1,54 +1,49 @@
-use std::collections::HashMap;
 use std::fs::File;
-
 use std::path::{Path, PathBuf};
-
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::bail;
 use anyhow::Result;
 use crossbeam::sync::ShardedLock;
-use crossbeam::sync::ShardedLockWriteGuard;
 
 use log::{debug, error};
-
 use regex::Regex;
 use serde::Deserialize;
 use url::Url;
 
 use crate::file_watcher::FileListener;
-use std::time::Duration;
+use crate::matcher::PathMatcher;
 
 const CONFIG_FILE: &str = "proxy.yaml";
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Deserialize)]
-struct ProxyProperties {
-    inbound: Vec<Inbound>,
-    outbound: Vec<Outbound>,
+pub struct ProxyProperties {
+    pub inbound: Vec<Inbound>,
+    pub outbound: Vec<Outbound>,
 }
 
 #[derive(Debug, Deserialize)]
-struct Inbound {
-    path: String,
-    group: String,
+pub struct Inbound {
+    pub path: String,
+    pub group: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct Outbound {
-    timeout: Option<u64>,
-    group: String,
-    servers: Vec<String>,
+pub struct Outbound {
+    pub timeout: Option<u64>,
+    pub group: String,
+    pub servers: Vec<String>,
 }
 
 #[derive(Debug)]
 struct ProxyConfig {
     props: ProxyProperties,
-    path_matchers: Vec<(Regex, Option<Group>)>,
 }
 
 pub struct Configuration {
     proxy_config: ShardedLock<ProxyConfig>,
+    matchers: ShardedLock<PathMatcher>,
 }
 
 #[derive(Debug, Clone)]
@@ -89,13 +84,13 @@ impl Configuration {
     {
         let props = load_properties(&path)?;
         debug!("Loaded props {:?}", &props);
-        let path_matchers = create_path_matchers(&props)?;
+        let path_matchers = PathMatcher::new(&props)?;
         debug!("Path matchers {:?}", &path_matchers);
+
+        let path_matchers = ShardedLock::new(path_matchers);
         Ok(Configuration {
-            proxy_config: ShardedLock::new(ProxyConfig {
-                props,
-                path_matchers,
-            }),
+            proxy_config: ShardedLock::new(ProxyConfig { props }),
+            matchers: path_matchers,
         })
     }
 
@@ -115,13 +110,10 @@ impl Configuration {
     }
 
     fn find_match_group(&self, req_path: &str) -> Option<(Regex, Option<Group>)> {
-        self.proxy_config
+        self.matchers
             .read()
             .expect("proxy config read lock poisoned!")
-            .path_matchers
-            .iter()
-            .cloned()
-            .find(|(r, _g)| r.is_match(req_path))
+            .find_matching_group(req_path)
     }
 
     fn interested(&self, file_name: &str) -> bool {
@@ -145,7 +137,12 @@ impl Configuration {
                     .write()
                     .expect("proxy config write lock poisoned!");
 
-                match self.reload_path_matchers(&props, &mut write_lock) {
+                match self
+                    .matchers
+                    .write()
+                    .expect("matchers write lock poisoned!")
+                    .rebuild(&props)
+                {
                     Ok(_) => {
                         debug!("Reloaded properties {:?}", &props);
                         write_lock.props = props;
@@ -160,15 +157,6 @@ impl Configuration {
             }
         }
     }
-
-    fn reload_path_matchers(
-        &self,
-        props: &ProxyProperties,
-        write_lock: &mut ShardedLockWriteGuard<ProxyConfig>,
-    ) -> Result<()> {
-        write_lock.path_matchers = create_path_matchers(&props)?;
-        Ok(())
-    }
 }
 
 fn load_properties<P>(path: P) -> Result<ProxyProperties>
@@ -176,57 +164,4 @@ where
     P: AsRef<Path>,
 {
     Ok(serde_yaml::from_reader(File::open(path)?)?)
-}
-
-fn create_path_matchers(props: &ProxyProperties) -> Result<Vec<(Regex, Option<Group>)>> {
-    let lookup = props
-        .outbound
-        .iter()
-        .map(|o| (o.group.as_str(), o))
-        .collect();
-
-    props
-        .inbound
-        .iter()
-        .map(|i| {
-            Ok((
-                Regex::new(i.path.as_str())?,
-                convert_to_group(&i.group, &lookup),
-            ))
-        })
-        .collect()
-}
-
-fn convert_to_group(group: &str, lookup: &HashMap<&str, &Outbound>) -> Option<Group> {
-    let mut value = lookup.get(group);
-    if let Some(outbound) = value.take() {
-        let servers = outbound
-            .servers
-            .iter()
-            .filter_map(|v| {
-                if let Ok(url) = Url::parse(v) {
-                    Some(url)
-                } else {
-                    error!("Error parsing configuration url {} for group {}", v, group);
-                    None
-                }
-            })
-            .collect::<Vec<Url>>();
-
-        if servers.is_empty() {
-            None
-        } else {
-            let timeout = outbound
-                .timeout
-                .map_or(DEFAULT_TIMEOUT, Duration::from_secs);
-            let name = Arc::from(group);
-            Some(Group {
-                servers,
-                name,
-                timeout,
-            })
-        }
-    } else {
-        None
-    }
 }

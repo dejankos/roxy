@@ -32,7 +32,7 @@ impl Balancer {
     }
 
     pub async fn balance(&self, req: &HttpRequest) -> Result<Instance> {
-        let mut group = self.config.find_group(req.path())?;
+        let mut group = self.config.find_group(req.path()).await?;
         let count = self.current_count(group.name);
         let len = group.servers.len();
         let url = group.servers.remove(count.rem_euclid(len));

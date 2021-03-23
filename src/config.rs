@@ -1,18 +1,17 @@
-use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::bail;
 use anyhow::Result;
 use crossbeam::sync::ShardedLock;
 use log::{debug, error};
-use regex::Regex;
+
 use serde::Deserialize;
 use url::Url;
 
 use crate::file_watcher::FileListener;
 use crate::matcher::PathMatcher;
+use crate::utils::yaml_to_struct;
 
 const CONFIG_FILE: &str = "proxy.yaml";
 
@@ -81,7 +80,7 @@ impl Configuration {
     where
         P: AsRef<Path>,
     {
-        let props = load_properties(&path)?;
+        let props = yaml_to_struct(&path)?;
         debug!("Loaded props {:?}", &props);
         let path_matchers = PathMatcher::new(&props)?;
         debug!("Path matchers {:?}", &path_matchers);
@@ -93,26 +92,11 @@ impl Configuration {
         })
     }
 
-    pub fn find_group(&self, req_path: &str) -> Result<Group> {
-        if let Some(found) = self.find_match_group(req_path) {
-            if let Some(group) = found.1 {
-                Ok(group)
-            } else {
-                bail!(
-                    "Matching group for request path {} doesn't contain any servers",
-                    req_path
-                )
-            }
-        } else {
-            bail!("Matching group for request path {} not found", req_path)
-        }
-    }
-
-    fn find_match_group(&self, req_path: &str) -> Option<(Regex, Option<Group>)> {
+    pub async fn find_group(&self, req_path: &str) -> Result<Group> {
         self.matchers
             .read()
-            .expect("proxy config read lock poisoned!")
-            .find_matching_group(req_path)
+            .expect("matchers read lock poisoned!")
+            .find_group(req_path)
     }
 
     fn interested(&self, file_name: &str) -> bool {
@@ -120,7 +104,7 @@ impl Configuration {
     }
 
     fn reload_config(&self, path: &PathBuf) {
-        match load_properties(path) {
+        match yaml_to_struct(path) {
             Ok(props) => {
                 debug!(
                     "Reloading properties:\n old: {:?} \n new: {:?}",
@@ -154,11 +138,4 @@ impl Configuration {
             }
         }
     }
-}
-
-fn load_properties<P>(path: P) -> Result<ProxyProperties>
-where
-    P: AsRef<Path>,
-{
-    Ok(serde_yaml::from_reader(File::open(path)?)?)
 }

@@ -1,15 +1,14 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::bail;
 use anyhow::Result;
-use crossbeam::sync::ShardedLock;
-use crossbeam::sync::ShardedLockWriteGuard;
 use log::error;
 use regex::Regex;
-use std::sync::Arc;
 use url::Url;
 
-use crate::config::{Configuration, Group, Outbound, ProxyProperties};
+use crate::config::{Group, Outbound, ProxyProperties};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -29,7 +28,22 @@ impl PathMatcher {
         Ok(())
     }
 
-    pub fn find_matching_group(&self, req_path: &str) -> Option<(Regex, Option<Group>)> {
+    pub fn find_group(&self, req_path: &str) -> Result<Group> {
+        if let Some(found) = self.find_matching_group(req_path) {
+            if let Some(group) = found.1 {
+                Ok(group)
+            } else {
+                bail!(
+                    "Matching group for request path {} doesn't contain any servers",
+                    req_path
+                )
+            }
+        } else {
+            bail!("Matching group for request path {} not found", req_path)
+        }
+    }
+
+    fn find_matching_group(&self, req_path: &str) -> Option<(Regex, Option<Group>)> {
         self.matchers
             .iter()
             .cloned()
@@ -37,13 +51,12 @@ impl PathMatcher {
     }
 }
 
-//FIXME
 fn create_path_matchers(props: &ProxyProperties) -> Result<Vec<(Regex, Option<Group>)>> {
     let lookup = props
         .outbound
         .iter()
         .map(|o| (o.group.as_str(), o))
-        .collect();
+        .collect::<HashMap<&str, &Outbound>>();
 
     props
         .inbound
@@ -51,43 +64,39 @@ fn create_path_matchers(props: &ProxyProperties) -> Result<Vec<(Regex, Option<Gr
         .map(|i| {
             Ok((
                 Regex::new(i.path.as_str())?,
-                convert_to_group(&i.group, &lookup),
+                lookup
+                    .get(&i.group.as_str())
+                    .map_or_else(|| None, |v| convert_to_group(&i.group, v)),
             ))
         })
         .collect()
 }
 
-//FIXME
-fn convert_to_group(group: &str, lookup: &HashMap<&str, &Outbound>) -> Option<Group> {
-    let mut value = lookup.get(group);
-    if let Some(outbound) = value.take() {
-        let servers = outbound
-            .servers
-            .iter()
-            .filter_map(|v| {
-                if let Ok(url) = Url::parse(v) {
-                    Some(url)
-                } else {
-                    error!("Error parsing configuration url {} for group {}", v, group);
-                    None
-                }
-            })
-            .collect::<Vec<Url>>();
+fn convert_to_group(group: &str, outbound: &Outbound) -> Option<Group> {
+    let servers = outbound
+        .servers
+        .iter()
+        .filter_map(|v| {
+            if let Ok(url) = Url::parse(v) {
+                Some(url)
+            } else {
+                error!("Error parsing configuration url {} for group {}", v, group);
+                None
+            }
+        })
+        .collect::<Vec<Url>>();
 
-        if servers.is_empty() {
-            None
-        } else {
-            let timeout = outbound
-                .timeout
-                .map_or(DEFAULT_TIMEOUT, Duration::from_secs);
-            let name = Arc::from(group);
-            Some(Group {
-                servers,
-                name,
-                timeout,
-            })
-        }
-    } else {
+    if servers.is_empty() {
         None
+    } else {
+        let timeout = outbound
+            .timeout
+            .map_or(DEFAULT_TIMEOUT, Duration::from_secs);
+        let name = Arc::from(group);
+        Some(Group {
+            servers,
+            name,
+            timeout,
+        })
     }
 }

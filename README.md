@@ -21,3 +21,23 @@ outbound:
     servers:
       - http://someurl:port/path
       - https://someurl2:port/path2
+```
+
+## Configuration
+TODO
+
+
+## Build from source
+
+### Install Rust
+```bash
+$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+Update to latest stable version
+```bash
+$ rustup update
+```
+### Build
+```bash
+$ cargo build
+```

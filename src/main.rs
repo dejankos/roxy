@@ -15,6 +15,7 @@ use crate::proxy::Proxy;
 use structopt::StructOpt;
 
 mod balancer;
+mod cache;
 mod config;
 mod file_watcher;
 mod matcher;

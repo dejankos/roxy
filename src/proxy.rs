@@ -5,8 +5,9 @@ use actix_web::http::Uri;
 use actix_web::{web, HttpRequest, HttpResponse};
 use anyhow::anyhow;
 use anyhow::Result;
-use awc::Connector;
+use awc::http::header::CACHE_CONTROL;
 use awc::{Client, ClientRequest};
+use awc::{ClientResponse, Connector};
 use log::debug;
 use log::error;
 use openssl::ssl::{SslConnector, SslMethod};
@@ -17,6 +18,7 @@ use crate::balancer::Balancer;
 const XFF_HEADER_NAME: &str = "X-Forwarded-For";
 const HTTPS_SCHEME: &str = "https";
 const EMPTY: &str = "";
+const EMPTY_STR_VEC: Vec<&str> = vec![];
 
 pub struct Proxy {
     balancer: Balancer,
@@ -34,6 +36,10 @@ trait RequestHeaders {
     fn xff(&self) -> Option<&str>;
 
     fn host(&self) -> String;
+}
+
+trait ResponseHeaders {
+    fn max_age(&self) -> Option<usize>;
 }
 
 impl RequestHeaders for HttpRequest {
@@ -82,6 +88,40 @@ impl ProxyHeaders for ClientRequest {
     fn clear_headers(mut self) -> Self {
         self.headers_mut().remove("Connection");
         self
+    }
+}
+
+impl ResponseHeaders for ClientResponse {
+    fn max_age(&self) -> Option<usize> {
+        let mut max_age = None;
+        let mut public = false;
+
+        self.headers()
+            .get_all(CACHE_CONTROL)
+            .into_iter()
+            .flat_map(|header_value| match header_value.to_str() {
+                Ok(s) => s.split(',').collect(),
+                Err(_) => EMPTY_STR_VEC,
+            })
+            .for_each(|split| {
+                if split == "public" {
+                    public = true;
+                }
+
+                let kv_pair: Vec<&str> = split.split('=').collect();
+                if kv_pair.len() == 2 && kv_pair[0] == "max-age" {
+                    max_age = match kv_pair[1].parse() {
+                        Ok(value) => Some(value),
+                        Err(_) => None,
+                    };
+                }
+            });
+
+        if public {
+            max_age
+        } else {
+            None
+        }
     }
 }
 

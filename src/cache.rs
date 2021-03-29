@@ -1,0 +1,2 @@
+struct CachedRequest {}
+struct Cache {}

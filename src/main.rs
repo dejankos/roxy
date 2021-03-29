@@ -18,6 +18,7 @@ mod balancer;
 mod cache;
 mod config;
 mod file_watcher;
+mod http_utils;
 mod matcher;
 mod proxy;
 mod utils;

@@ -5,20 +5,17 @@ use actix_web::http::Uri;
 use actix_web::{web, HttpRequest, HttpResponse};
 use anyhow::anyhow;
 use anyhow::Result;
-use awc::http::header::CACHE_CONTROL;
+
+use awc::Connector;
 use awc::{Client, ClientRequest};
-use awc::{ClientResponse, Connector};
 use log::debug;
-use log::error;
 use openssl::ssl::{SslConnector, SslMethod};
 use url::Url;
 
 use crate::balancer::Balancer;
+use crate::http_utils::{get_host, Headers, XFF_HEADER_NAME};
 
-const XFF_HEADER_NAME: &str = "X-Forwarded-For";
 const HTTPS_SCHEME: &str = "https";
-const EMPTY: &str = "";
-const EMPTY_STR_VEC: Vec<&str> = vec![];
 
 pub struct Proxy {
     balancer: Balancer,
@@ -30,57 +27,16 @@ trait ProxyHeaders {
     fn clear_headers(self) -> Self;
 }
 
-trait RequestHeaders {
-    fn get_header_value(&self, name: &str) -> Option<&str>;
-
-    fn xff(&self) -> Option<&str>;
-
-    fn host(&self) -> String;
-}
-
-trait ResponseHeaders {
-    fn max_age(&self) -> Option<usize>;
-}
-
-impl RequestHeaders for HttpRequest {
-    fn get_header_value(&self, name: &str) -> Option<&str> {
-        if let Some(value) = self.headers().get(name) {
-            match value.to_str() {
-                Ok(v) => Some(v),
-                Err(e) => {
-                    error!("Error reading header {}, e {}", name, e);
-                    None
-                }
-            }
-        } else {
-            None
-        }
-    }
-
-    fn xff(&self) -> Option<&str> {
-        self.get_header_value(XFF_HEADER_NAME)
-    }
-
-    fn host(&self) -> String {
-        let conn_info = self.connection_info();
-        let host = conn_info.host();
-        if let Some(idx) = host.find(':') {
-            host[..idx].into()
-        } else {
-            EMPTY.into()
-        }
-    }
-}
-
 impl ProxyHeaders for ClientRequest {
     fn append_proxy_headers(self, req_from: &HttpRequest) -> Self {
-        let xff = req_from.xff();
+        let headers = req_from.headers();
+        let xff = headers.xff();
         let mut xff_value = String::new();
         if let Some(xff) = xff {
             xff_value.push_str(xff);
             xff_value.push_str(", ");
         }
-        xff_value.push_str(req_from.host().as_str());
+        xff_value.push_str(get_host(req_from).as_str());
 
         self.set_header(XFF_HEADER_NAME, xff_value)
     }
@@ -88,40 +44,6 @@ impl ProxyHeaders for ClientRequest {
     fn clear_headers(mut self) -> Self {
         self.headers_mut().remove("Connection");
         self
-    }
-}
-
-impl ResponseHeaders for ClientResponse {
-    fn max_age(&self) -> Option<usize> {
-        let mut max_age = None;
-        let mut public = false;
-
-        self.headers()
-            .get_all(CACHE_CONTROL)
-            .into_iter()
-            .flat_map(|header_value| match header_value.to_str() {
-                Ok(s) => s.split(',').collect(),
-                Err(_) => EMPTY_STR_VEC,
-            })
-            .for_each(|split| {
-                if split == "public" {
-                    public = true;
-                }
-
-                let kv_pair: Vec<&str> = split.split('=').collect();
-                if kv_pair.len() == 2 && kv_pair[0] == "max-age" {
-                    max_age = match kv_pair[1].parse() {
-                        Ok(value) => Some(value),
-                        Err(_) => None,
-                    };
-                }
-            });
-
-        if public {
-            max_age
-        } else {
-            None
-        }
     }
 }
 

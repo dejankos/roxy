@@ -1,6 +1,6 @@
 use actix_web::http::header::{HeaderMap, CACHE_CONTROL};
 use actix_web::HttpRequest;
-use awc::ClientResponse;
+
 
 pub const XFF_HEADER_NAME: &str = "X-Forwarded-For";
 const EMPTY: &str = "";
@@ -70,8 +70,4 @@ pub fn get_host(req: &HttpRequest) -> String {
     } else {
         EMPTY.into()
     }
-}
-
-pub fn is_cacheable(_res: &ClientResponse) -> bool {
-    unimplemented!()
 }

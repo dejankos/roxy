@@ -1,5 +1,4 @@
-use std::time::{Instant};
-
+use std::time::Instant;
 
 use actix_web::web::Bytes;
 

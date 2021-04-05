@@ -58,7 +58,7 @@ impl Balancer {
     }
 
     fn next(&self, c: usize) -> usize {
-        if c == usize::max_value() {
+        if c == usize::MAX {
             1
         } else {
             c + 1

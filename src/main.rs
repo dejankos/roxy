@@ -17,6 +17,7 @@ use structopt::StructOpt;
 mod balancer;
 mod cache;
 mod config;
+mod blocking_delay_queue;
 mod file_watcher;
 mod http_utils;
 mod matcher;

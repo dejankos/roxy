@@ -5,7 +5,7 @@ use std::time::{Instant};
 
 type MinHeap<T> = BinaryHeap<Reverse<DelayItem<T>>>;
 
-struct BlockingDelayQueue<T>
+pub struct BlockingDelayQueue<T>
 where
     T: Ord,
 {
@@ -127,7 +127,7 @@ mod tests {
 
     use crate::blocking_delay_queue::BlockingDelayQueue;
 
-    // todo test timeout
+    // todo timeout on tests
     #[test]
     fn should_put_and_take_ordered() {
         let queue = BlockingDelayQueue::new(2);

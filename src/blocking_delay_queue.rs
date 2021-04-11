@@ -1,6 +1,6 @@
 use std::cmp::{Ordering, Reverse};
 use std::collections::BinaryHeap;
-use std::sync::{Condvar, LockResult, Mutex, MutexGuard, WaitTimeoutResult};
+use std::sync::{Condvar, Mutex, MutexGuard};
 use std::time::{Instant};
 
 type MinHeap<T> = BinaryHeap<Reverse<DelayItem<T>>>;

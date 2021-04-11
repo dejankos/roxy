@@ -15,10 +15,11 @@ use url::Url;
 use crate::balancer::Balancer;
 use crate::http_utils::{get_host, Headers, XFF_HEADER_NAME};
 
+
 const HTTPS_SCHEME: &str = "https";
 
 pub struct Proxy {
-    balancer: Balancer,
+    balancer: Balancer
 }
 
 trait ProxyHeaders {

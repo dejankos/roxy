@@ -1,4 +1,5 @@
 use actix_web::http::header::{HeaderMap, CACHE_CONTROL};
+use actix_web::http::Method;
 use actix_web::HttpRequest;
 
 pub const XFF_HEADER_NAME: &str = "X-Forwarded-For";
@@ -69,4 +70,15 @@ pub fn get_host(req: &HttpRequest) -> String {
     } else {
         EMPTY.into()
     }
+}
+
+pub fn cache_data(req: &HttpRequest) -> (bool, usize) {
+    if req.method() != Method::GET {
+        (false, 0)
+    } else if let Some(max_age) = req.headers().max_age() {
+        (true, max_age)
+    } else {
+        (false, 0)
+    }
+    //todo session data ?
 }

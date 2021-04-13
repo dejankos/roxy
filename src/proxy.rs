@@ -5,7 +5,6 @@ use actix_web::http::Uri;
 use actix_web::{web, HttpRequest, HttpResponse};
 use anyhow::anyhow;
 use anyhow::Result;
-
 use awc::Connector;
 use awc::{Client, ClientRequest};
 use log::debug;
@@ -13,13 +12,14 @@ use openssl::ssl::{SslConnector, SslMethod};
 use url::Url;
 
 use crate::balancer::Balancer;
+use crate::cache::ResponseCache;
 use crate::http_utils::{get_host, Headers, XFF_HEADER_NAME};
-
 
 const HTTPS_SCHEME: &str = "https";
 
 pub struct Proxy {
-    balancer: Balancer
+    balancer: Balancer,
+    res_cache: ResponseCache,
 }
 
 trait ProxyHeaders {
@@ -50,7 +50,11 @@ impl ProxyHeaders for ClientRequest {
 
 impl Proxy {
     pub fn new(balancer: Balancer) -> Self {
-        Proxy { balancer }
+        let res_cache = ResponseCache::new(10_000); //todo from config
+        Proxy {
+            balancer,
+            res_cache,
+        }
     }
 
     pub async fn proxy(&self, req: HttpRequest, body: web::Bytes) -> Result<HttpResponse> {

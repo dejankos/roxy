@@ -1,7 +1,7 @@
 use std::cmp::{Ordering, Reverse};
 use std::collections::BinaryHeap;
 use std::sync::{Condvar, Mutex, MutexGuard};
-use std::time::{Instant};
+use std::time::Instant;
 
 type MinHeap<T> = BinaryHeap<Reverse<DelayItem<T>>>;
 
@@ -54,6 +54,17 @@ where
             heap: Mutex::new(BinaryHeap::with_capacity(capacity)),
             condvar: Condvar::new(),
             capacity,
+        }
+    }
+
+    // Inserts the specified element into this queue if it is possible to do so immediately without violating capacity restrictions
+    pub fn add(&self, data: T, delay: Instant) -> bool {
+        let heap_mutex = self.heap.lock().expect("Queue lock poisoned");
+        if heap_mutex.len() < self.capacity {
+            Self::push(heap_mutex, data, delay);
+            true
+        } else {
+            false
         }
     }
 

@@ -27,9 +27,10 @@ where
 {
     map: Arc<ShardedLock<HashMap<K, V>>>,
     delay_q: Arc<BlockingDelayQueue<K>>,
+    capacity: usize,
 }
 
-struct ResponseCache {
+pub struct ResponseCache {
     cache: Cache<Arc<str>, CachedResponse>,
 }
 
@@ -80,16 +81,20 @@ where
         let map = Arc::new(ShardedLock::new(HashMap::with_capacity(capacity)));
         Self::run_cache_expire_thread(delay_q.clone(), map.clone());
 
-        Cache { map, delay_q }
+        Cache {
+            map,
+            delay_q,
+            capacity,
+        }
     }
 
     fn store(&self, k: K, v: V, ttl: Instant) {
-        self.map
-            .write()
-            .expect("Cache map lock poisoned!")
-            .insert(k.clone(), v);
-
-        self.delay_q.put(k.clone(), ttl);
+        let mut guard = self.map.write().expect("Cache map lock poisoned!");
+        if guard.len() < self.capacity {
+            guard.insert(k.clone(), v);
+            // avoid blocking api, len should be same as map
+            let _ = self.delay_q.add(k.clone(), ttl);
+        }
     }
 
     fn get(&self, k: K) -> Option<V> {
@@ -98,6 +103,10 @@ where
             .expect("Cache map lock poisoned!")
             .get(&k)
             .map_or_else(|| None, |v| Some(v.clone())) // fixme
+    }
+
+    fn len(&self) -> usize {
+        self.map.read().expect("Cache map lock poisoned!").len()
     }
 
     fn run_cache_expire_thread(
@@ -129,5 +138,15 @@ mod tests {
         assert_eq!(Some(2), cache.get(1));
         thread::sleep(ttl);
         assert_eq!(None, cache.get(1));
+    }
+
+    #[test]
+    fn should_not_block_when_capacity_is_reached() {
+        let ttl = Instant::now() + Duration::from_millis(50);
+        let cache = Cache::new(1);
+        cache.store(1, 2, ttl);
+        cache.store(2, 1, ttl);
+        assert_eq!(1, cache.len());
+        assert_eq!(Some(2), cache.get(1));
     }
 }

@@ -72,6 +72,12 @@ pub fn get_host(req: &HttpRequest) -> String {
     }
 }
 
+pub fn is_cacheable(req: &HttpRequest) -> bool {
+    req.method() == Method::GET
+    //todo session data ?
+}
+
+
 pub fn cache_data(req: &HttpRequest) -> (bool, usize) {
     if req.method() != Method::GET {
         (false, 0)

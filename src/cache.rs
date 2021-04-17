@@ -13,11 +13,11 @@ use crossbeam::sync::ShardedLock;
 use crate::blocking_delay_queue::BlockingDelayQueue;
 
 #[derive(Clone)]
-struct CachedResponse {
-    status_code: StatusCode,
-    headers: HeaderMap,
-    body: Bytes,
-    ttl: Instant,
+pub struct CachedResponse {
+    pub status_code: StatusCode,
+    pub headers: HeaderMap,
+    pub body: Bytes,
+    pub ttl: Instant,
 }
 
 pub struct Cache<K, V>
@@ -41,10 +41,10 @@ impl CachedResponse {
 }
 
 impl ResponseCache {
-    pub fn new(capacity: usize) -> Self {
-        ResponseCache {
-            cache: Cache::new(capacity),
-        }
+    pub fn new(capacity: usize) -> Result<Self> {
+        Ok(ResponseCache {
+            cache: Cache::new(capacity)?,
+        })
     }
 
     pub fn store(&self, cache_key: &str, res: &HttpResponse, body: Bytes, ttl: Instant) {
@@ -76,16 +76,16 @@ where
     K: Clone + Ord + Hash + Send + Sync + 'static,
     V: Clone + Send + Sync + 'static,
 {
-    fn new(capacity: usize) -> Self {
+    fn new(capacity: usize) -> Result<Self> {
         let delay_q = Arc::new(BlockingDelayQueue::new(capacity));
         let map = Arc::new(ShardedLock::new(HashMap::with_capacity(capacity)));
-        Self::run_cache_expire_thread(delay_q.clone(), map.clone());
+        Self::run_cache_expire_thread(delay_q.clone(), map.clone())?;
 
-        Cache {
+        Ok(Cache {
             map,
             delay_q,
             capacity,
-        }
+        })
     }
 
     fn store(&self, k: K, v: V, ttl: Instant) {
@@ -133,7 +133,7 @@ mod tests {
     #[test]
     fn should_expire_value() {
         let ttl = Duration::from_millis(50);
-        let cache = Cache::new(1);
+        let cache = Cache::new(1).unwrap();
         cache.store(1, 2, Instant::now() + ttl);
         assert_eq!(Some(2), cache.get(1));
         thread::sleep(ttl);
@@ -143,7 +143,7 @@ mod tests {
     #[test]
     fn should_not_block_when_capacity_is_reached() {
         let ttl = Instant::now() + Duration::from_millis(50);
-        let cache = Cache::new(1);
+        let cache = Cache::new(1).unwrap();
         cache.store(1, 2, ttl);
         cache.store(2, 1, ttl);
         assert_eq!(1, cache.len());

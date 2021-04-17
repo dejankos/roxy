@@ -1,19 +1,23 @@
 use std::convert::TryFrom;
+
 use std::time::Duration;
 
+
+use actix_web::dev::{HttpResponseBuilder, RequestHead};
 use actix_web::http::Uri;
+use actix_web::web::Bytes;
 use actix_web::{web, HttpRequest, HttpResponse};
 use anyhow::anyhow;
 use anyhow::Result;
-use awc::Connector;
 use awc::{Client, ClientRequest};
+use awc::{Connector};
 use log::debug;
 use openssl::ssl::{SslConnector, SslMethod};
 use url::Url;
 
 use crate::balancer::Balancer;
 use crate::cache::ResponseCache;
-use crate::http_utils::{get_host, Headers, XFF_HEADER_NAME};
+use crate::http_utils::{get_host, is_cacheable, Headers, XFF_HEADER_NAME};
 
 const HTTPS_SCHEME: &str = "https";
 
@@ -49,95 +53,84 @@ impl ProxyHeaders for ClientRequest {
 }
 
 impl Proxy {
-    pub fn new(balancer: Balancer) -> Self {
-        let res_cache = ResponseCache::new(10_000); //todo from config
-        Proxy {
+    pub fn new(balancer: Balancer) -> Result<Self> {
+        let res_cache = ResponseCache::new(10_000)?; //todo from config
+        Ok(Proxy {
             balancer,
             res_cache,
-        }
+        })
     }
 
     pub async fn proxy(&self, req: HttpRequest, body: web::Bytes) -> Result<HttpResponse> {
+        let key = ResponseCache::build_cache_key(&req);
+        let req_cacheable = is_cacheable(&req);
+        if req_cacheable {
+            if let Some(res) = self.res_cache.get(&key) {
+                let mut response = HttpResponse::build(res.status_code).body(res.body);
+                *response.headers_mut() = res.headers;
+                return Ok(response);
+            }
+        }
+
         let instance = self.balancer.balance(&req).await?;
         let scheme = instance.url.scheme().to_owned();
-        let proxy_uri = create_proxy_uri(instance.url, req.path(), req.query_string())?;
+        let proxy_uri = Self::create_proxy_uri(instance.url, req.path(), req.query_string())?;
 
         debug!("proxying to {}", &proxy_uri);
-        let mut response = create_http_client(scheme.as_str(), instance.timeout)?
-            .request_from(proxy_uri, req.head())
-            .append_proxy_headers(&req)
+        let (mut response, bytes) =
+            Self::send(scheme, instance.timeout, proxy_uri, req.head(), &req, body).await?;
+
+        //todo cache res
+
+        Ok(response.body(bytes))
+    }
+
+    async fn send(
+        scheme: String,
+        timeout: Duration,
+        proxy_uri: Uri,
+        req_head: &RequestHead,
+        req: &HttpRequest,
+        body: web::Bytes,
+    ) -> Result<(HttpResponseBuilder, Bytes)> {
+        let mut response = Self::create_http_client(scheme.as_str(), timeout)?
+            .request_from(proxy_uri, req_head)
+            .append_proxy_headers(req)
             .clear_headers()
             .send_body(body)
             .await
             .map_err(|e| anyhow!("http proxy error {}", e))?;
 
-        let mut client_resp = HttpResponse::build(response.status());
-        Ok(client_resp.body(response.body().await?))
-    }
-}
+        let client_resp = HttpResponse::build(response.status());
+        let bytes = response.body().await?;
 
-fn create_proxy_uri(url: Url, path: &str, query_string: &str) -> Result<Uri> {
-    let mut url = url;
-    url.set_path(format!("{}{}", &url.path()[1..], path).as_str());
-    if !query_string.is_empty() {
-        url.set_query(Some(query_string));
+        Ok((client_resp, bytes))
     }
 
-    Ok(Uri::try_from(url.as_str())?)
-}
+    fn create_proxy_uri(url: Url, path: &str, query_string: &str) -> Result<Uri> {
+        let mut url = url;
+        url.set_path(format!("{}{}", &url.path()[1..], path).as_str());
+        if !query_string.is_empty() {
+            url.set_query(Some(query_string));
+        }
 
-fn create_http_client(scheme: &str, timeout: Duration) -> Result<Client> {
-    if scheme == HTTPS_SCHEME {
-        let ssl_connector = SslConnector::builder(SslMethod::tls())?.build();
-        let connector = Connector::new()
-            .ssl(ssl_connector)
-            .timeout(timeout)
-            .finish();
-
-        Ok(Client::builder()
-            .connector(connector)
-            .timeout(timeout)
-            .finish())
-    } else {
-        Ok(Client::builder().timeout(timeout).finish())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use url::Url;
-
-    use crate::proxy::create_proxy_uri;
-
-    #[test]
-    fn should_create_uri() {
-        let url = Url::parse("http://localhost:8080").unwrap();
-        let path = "v1/test";
-        let query_string = "";
-
-        assert_eq!(
-            "http://localhost:8080/v1/test",
-            create_proxy_uri(url, path, query_string).unwrap()
-        );
+        Ok(Uri::try_from(url.as_str())?)
     }
 
-    #[test]
-    fn should_create_uri_with_query_string() {
-        let url = Url::parse("http://localhost:8080").unwrap();
-        let path = "v1/test";
-        let query_string = "a=1&b=2";
+    fn create_http_client(scheme: &str, timeout: Duration) -> Result<Client> {
+        if scheme == HTTPS_SCHEME {
+            let ssl_connector = SslConnector::builder(SslMethod::tls())?.build();
+            let connector = Connector::new()
+                .ssl(ssl_connector)
+                .timeout(timeout)
+                .finish();
 
-        assert_eq!(
-            "http://localhost:8080/v1/test?a=1&b=2",
-            create_proxy_uri(url, path, query_string).unwrap()
-        );
-    }
-
-    #[test]
-    fn should_resolve_scheme() {
-        let url = Url::parse("http://localhost:8080").unwrap();
-        assert_eq!("http", url.scheme());
-        let url = Url::parse("https://localhost:8080").unwrap();
-        assert_eq!("https", url.scheme());
+            Ok(Client::builder()
+                .connector(connector)
+                .timeout(timeout)
+                .finish())
+        } else {
+            Ok(Client::builder().timeout(timeout).finish())
+        }
     }
 }

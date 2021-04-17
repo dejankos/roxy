@@ -1,5 +1,5 @@
 # Roxy - reverse  proxy (WIP)
-Reverse proxy with support for live configuration updates, balancing strategies, ssl and  we'll see what else.
+Reverse proxy with support for live configuration updates, balancing strategies, ssl and caching.
 
 ## Usage
 

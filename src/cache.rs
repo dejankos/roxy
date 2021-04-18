@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Arc;
 use std::thread;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use actix_web::web::Bytes;
 use actix_web::{HttpRequest, HttpResponse};
@@ -11,6 +11,9 @@ use awc::http::{HeaderMap, StatusCode};
 use crossbeam::sync::ShardedLock;
 
 use crate::blocking_delay_queue::BlockingDelayQueue;
+use crate::http_utils::Headers;
+
+
 
 #[derive(Clone)]
 pub struct CachedResponse {
@@ -47,9 +50,18 @@ impl ResponseCache {
         })
     }
 
-    pub fn store(&self, cache_key: &str, res: &HttpResponse, body: Bytes, ttl: Instant) {
+    pub fn store(&self, cache_key: &str, res: &HttpResponse, body: Bytes) {
+        if res.status() != StatusCode::OK {
+            return;
+        }
+        let max_age = res.headers().max_age();
+        if max_age.is_none() {
+            return;
+        }
+
         let status_code = res.status();
         let headers = res.headers().clone();
+        let ttl = Instant::now() + Duration::from_secs(max_age.unwrap());
 
         let response = CachedResponse {
             status_code,
@@ -62,8 +74,14 @@ impl ResponseCache {
         self.cache.store(str_ptr, response, ttl);
     }
 
-    pub fn get(&self, cache_key: &str) -> Option<CachedResponse> {
-        self.cache.get(Arc::from(cache_key))
+    pub fn get(&self, cache_key: &str) -> Option<HttpResponse> {
+        if let Some(res) = self.cache.get(Arc::from(cache_key)) {
+            let mut response = HttpResponse::build(res.status_code).body(res.body);
+            *response.headers_mut() = res.headers;
+            Some(response)
+        } else {
+            None
+        }
     }
 
     pub fn build_cache_key(req: &HttpRequest) -> String {

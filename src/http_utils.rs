@@ -1,6 +1,6 @@
 use actix_web::http::header::{HeaderMap, CACHE_CONTROL};
 use actix_web::http::Method;
-use actix_web::HttpRequest;
+use actix_web::{HttpRequest};
 
 pub const XFF_HEADER_NAME: &str = "X-Forwarded-For";
 const EMPTY: &str = "";
@@ -11,7 +11,7 @@ pub trait Headers {
 
     fn xff(&self) -> Option<&str>;
 
-    fn max_age(&self) -> Option<usize>;
+    fn max_age(&self) -> Option<u64>;
 }
 
 impl Headers for &HeaderMap {
@@ -30,7 +30,7 @@ impl Headers for &HeaderMap {
         self.get_header_value(XFF_HEADER_NAME)
     }
 
-    fn max_age(&self) -> Option<usize> {
+    fn max_age(&self) -> Option<u64> {
         let mut max_age = None;
         let mut public = false;
 
@@ -72,19 +72,13 @@ pub fn get_host(req: &HttpRequest) -> String {
     }
 }
 
-pub fn is_cacheable(req: &HttpRequest) -> bool {
-    req.method() == Method::GET
-    //todo session data ?
+pub trait Cacheable {
+    fn is_cacheable(&self) -> bool;
 }
 
-
-pub fn cache_data(req: &HttpRequest) -> (bool, usize) {
-    if req.method() != Method::GET {
-        (false, 0)
-    } else if let Some(max_age) = req.headers().max_age() {
-        (true, max_age)
-    } else {
-        (false, 0)
+impl Cacheable for HttpRequest {
+    fn is_cacheable(&self) -> bool {
+        self.method() == Method::GET
+        //todo session data ?
     }
-    //todo session data ?
 }

@@ -13,7 +13,7 @@ type Listener = Box<dyn FileListener + Sync + Send>;
 type Listeners = Arc<ShardedLock<Vec<Listener>>>;
 
 pub trait FileListener: Sync + Send {
-    fn notify_file_changed(&self, path: &PathBuf);
+    fn notify_file_changed(&self, path: &Path);
 }
 
 pub struct FileWatcher {

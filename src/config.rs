@@ -65,8 +65,9 @@ impl FileName for &PathBuf {
 }
 
 impl FileListener for Arc<Configuration> {
-    fn notify_file_changed(&self, path: &PathBuf) {
-        if !self.interested(path.file_name_to_str()) {
+    fn notify_file_changed(&self, path: &Path) {
+        let p = path.to_str();
+        if p.is_some() && !self.interested(p.unwrap()) {
             return;
         }
 
@@ -103,7 +104,7 @@ impl Configuration {
         CONFIG_FILE == file_name
     }
 
-    fn reload_config(&self, path: &PathBuf) {
+    fn reload_config(&self, path: &Path) {
         match yaml_to_struct(path) {
             Ok(props) => {
                 debug!(

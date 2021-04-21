@@ -13,8 +13,6 @@ use crossbeam::sync::ShardedLock;
 use crate::blocking_delay_queue::BlockingDelayQueue;
 use crate::http_utils::Headers;
 
-
-
 #[derive(Clone)]
 pub struct CachedResponse {
     pub status_code: StatusCode,
@@ -76,9 +74,13 @@ impl ResponseCache {
 
     pub fn get(&self, cache_key: &str) -> Option<HttpResponse> {
         if let Some(res) = self.cache.get(Arc::from(cache_key)) {
-            let mut response = HttpResponse::build(res.status_code).body(res.body);
-            *response.headers_mut() = res.headers;
-            Some(response)
+            if res.expired() {
+                None
+            } else {
+                let mut response = HttpResponse::build(res.status_code).body(res.body);
+                *response.headers_mut() = res.headers;
+                Some(response)
+            }
         } else {
             None
         }
@@ -111,7 +113,7 @@ where
         if guard.len() < self.capacity {
             guard.insert(k.clone(), v);
             // avoid blocking api, len should be same as map
-            let _ = self.delay_q.add(k.clone(), ttl);
+            self.delay_q.add(k, ttl);
         }
     }
 
@@ -123,6 +125,7 @@ where
             .map_or_else(|| None, |v| Some(v.clone())) // fixme
     }
 
+    #[allow(dead_code)]
     fn len(&self) -> usize {
         self.map.read().expect("Cache map lock poisoned!").len()
     }

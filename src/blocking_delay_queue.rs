@@ -68,6 +68,8 @@ where
         }
     }
 
+    // blocking api - used only in tests (for now)
+    #[allow(dead_code)]
     pub fn put(&self, data: T, delay: Instant) {
         let heap_mutex = self.heap.lock().expect("Queue lock poisoned");
         if heap_mutex.len() < self.capacity {
@@ -125,6 +127,7 @@ where
         mutex.pop().unwrap().0.data
     }
 
+    #[allow(dead_code)]
     fn size(&self) -> usize {
         self.heap.lock().expect("Queue lock poisoned").len()
     }

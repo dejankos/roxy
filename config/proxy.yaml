@@ -1,12 +1,30 @@
+# service configuration
+service:
+  # ip address
+  ip: localhost
+  # bind port
+  port: 8080
+  # worker threads
+  workers: 6
+  # dev mode - will enable only terminal logger
+  dev_mode: true
+
+# inbound paths
 inbound:
+  # match path to group
   - path: /abc/*
     group: group_1
+  # match path to group
   - path: /cde/*
     group: group_2
 
+# outbound server groups
 outbound:
   - group: group_1
+    # timeout for all servers in this group
     timeout: 60
+    # backend servers for this group
+    # round robin balancing to all servers
     servers:
       - http://localhost:8080/push
   - group: group_2

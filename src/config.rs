@@ -5,7 +5,6 @@ use std::time::Duration;
 use anyhow::Result;
 use crossbeam::sync::ShardedLock;
 use log::{debug, error};
-
 use serde::Deserialize;
 use url::Url;
 
@@ -15,8 +14,30 @@ use crate::utils::yaml_to_struct;
 
 const CONFIG_FILE: &str = "proxy.yaml";
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct Service {
+    pub ip: String,
+    pub port: String,
+    pub workers: usize,
+    pub log_path: Option<String>,
+    pub dev_mode: bool,
+}
+
+impl Default for Service {
+    fn default() -> Self {
+        Service {
+            ip: "localhost".to_string(),
+            port: "8080".to_string(),
+            workers: 6,
+            log_path: None,
+            dev_mode: true,
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ProxyProperties {
+    pub service: Service,
     pub inbound: Vec<Inbound>,
     pub outbound: Vec<Outbound>,
 }
@@ -64,22 +85,10 @@ impl FileName for &PathBuf {
     }
 }
 
-impl FileListener for Arc<Configuration> {
-    fn notify_file_changed(&self, path: &Path) {
-        let p = path.to_str();
-        if p.is_some() && !self.interested(p.unwrap()) {
-            return;
-        }
-
-        debug!("Received change event on {:?}", &path);
-        self.reload_config(path);
-    }
-}
-
 impl Configuration {
     pub fn new<P>(path: P) -> Result<Self>
-    where
-        P: AsRef<Path>,
+        where
+            P: AsRef<Path>,
     {
         let props = yaml_to_struct(&path)?;
         debug!("Loaded props {:?}", &props);
@@ -98,6 +107,15 @@ impl Configuration {
             .read()
             .expect("matchers read lock poisoned!")
             .find_group(req_path)
+    }
+
+    pub fn service_config(&self) -> Service {
+        self.proxy_config
+            .read()
+            .expect("proxy config read lock poisoned!")
+            .props
+            .service
+            .clone()
     }
 
     fn interested(&self, file_name: &str) -> bool {
@@ -138,5 +156,16 @@ impl Configuration {
                 error!("Error loading proxy config. Err = {}", e);
             }
         }
+    }
+}
+
+impl FileListener for Arc<Configuration> {
+    fn notify_file_changed(&self, path: &Path) {
+        if !self.interested(path.to_string_lossy().as_ref()) {
+            return;
+        }
+
+        debug!("Received change event on {:?}", &path);
+        self.reload_config(path);
     }
 }

@@ -1,6 +1,6 @@
 use actix_web::http::header::{HeaderMap, CACHE_CONTROL};
 use actix_web::http::Method;
-use actix_web::{HttpRequest};
+use actix_web::HttpRequest;
 
 pub const XFF_HEADER_NAME: &str = "X-Forwarded-For";
 const EMPTY: &str = "";

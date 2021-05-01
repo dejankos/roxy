@@ -12,7 +12,7 @@ service:
 # inbound paths
 inbound:
   # match path to group
-  - path: /abc/*
+  - path: /tools/*
     group: group_1
   # match path to group
   - path: /cde/*
@@ -26,7 +26,7 @@ outbound:
     # backend servers for this group
     # round robin balancing to all servers
     servers:
-      - http://localhost:8080/push
+      - https://www.rust-lang.org/
   - group: group_2
     servers:
       - http://test:8082

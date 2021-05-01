@@ -87,8 +87,8 @@ impl FileName for &PathBuf {
 
 impl Configuration {
     pub fn new<P>(path: P) -> Result<Self>
-        where
-            P: AsRef<Path>,
+    where
+        P: AsRef<Path>,
     {
         let props = yaml_to_struct(&path)?;
         debug!("Loaded props {:?}", &props);

@@ -7,11 +7,11 @@ use std::time::{Duration, Instant};
 use actix_web::web::Bytes;
 use actix_web::{HttpRequest, HttpResponse};
 use anyhow::Result;
-use awc::http::{HeaderMap, StatusCode};
 use crossbeam::sync::ShardedLock;
 
 use crate::blocking_delay_queue::BlockingDelayQueue;
 use crate::http_utils::Headers;
+use actix_web::http::{HeaderMap, StatusCode};
 
 #[derive(Clone)]
 pub struct CachedResponse {

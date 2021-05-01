@@ -1,24 +1,23 @@
 use std::convert::TryFrom;
+use std::time::Duration;
 
-use std::time::{Duration};
-
+use actix_web::client::{Client, ClientRequest};
 use actix_web::dev::{HttpResponseBuilder, RequestHead};
 use actix_web::http::Uri;
 use actix_web::web::Bytes;
 use actix_web::{web, HttpRequest, HttpResponse};
 use anyhow::anyhow;
 use anyhow::Result;
-use awc::Connector;
-use awc::{Client, ClientRequest};
-use log::debug;
-use openssl::ssl::{SslConnector, SslMethod};
+
+use log::info;
+
 use url::Url;
 
 use crate::balancer::{Balancer, Instance};
 use crate::cache::ResponseCache;
 use crate::http_utils::{get_host, Cacheable, Headers, XFF_HEADER_NAME};
 
-const HTTPS_SCHEME: &str = "https";
+// const HTTPS_SCHEME: &str = "https";
 
 pub struct Proxy {
     balancer: Balancer,
@@ -85,11 +84,11 @@ impl Proxy {
         req: &HttpRequest,
         body: web::Bytes,
     ) -> Result<(HttpResponseBuilder, Bytes)> {
-        let scheme = instance.url.scheme().to_owned();
+        // let _scheme = instance.url.scheme().to_owned();
         let proxy_uri = Self::create_proxy_uri(instance.url, req.path(), req.query_string())?;
 
-        debug!("proxying to {}", &proxy_uri);
-        let mut response = Self::create_http_client(scheme.as_str(), instance.timeout)?
+        info!("proxying to {}", &proxy_uri);
+        let mut response = Self::create_http_client(instance.timeout)
             .request_from(proxy_uri, req_head)
             .append_proxy_headers(req)
             .clear_headers()
@@ -113,20 +112,24 @@ impl Proxy {
         Ok(Uri::try_from(url.as_str())?)
     }
 
-    fn create_http_client(scheme: &str, timeout: Duration) -> Result<Client> {
-        if scheme == HTTPS_SCHEME {
-            let ssl_connector = SslConnector::builder(SslMethod::tls())?.build();
-            let connector = Connector::new()
-                .ssl(ssl_connector)
-                .timeout(timeout)
-                .finish();
-
-            Ok(Client::builder()
-                .connector(connector)
-                .timeout(timeout)
-                .finish())
-        } else {
-            Ok(Client::builder().timeout(timeout).finish())
-        }
+    fn create_http_client(timeout: Duration) -> Client {
+        Client::builder().timeout(timeout).finish()
     }
+
+    // fn create_http_client(scheme: &str, timeout: Duration) -> Result<Client> {
+    //     if scheme == HTTPS_SCHEME {
+    //         let ssl_connector = SslConnector::builder(SslMethod::tls())?.build();
+    //         let connector = Connector::new()
+    //             .ssl(ssl_connector)
+    //             .timeout(timeout)
+    //             .finish();
+    //
+    //         Ok(Client::builder()
+    //             .connector(connector)
+    //             .timeout(timeout)
+    //             .finish())
+    //     } else {
+    //     Ok(Client::builder().timeout(timeout).finish())
+    //     }
+    // }
 }

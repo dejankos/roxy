@@ -83,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
     watcher.register_listener(Box::new(configuration.clone()));
     watcher.watch_file_changes()?;
 
-    let proxy = Proxy::new(Balancer::new(configuration.clone()));
+    let proxy = Proxy::new(Balancer::new(configuration.clone()))?;
     let data = web::Data::new(proxy);
     HttpServer::new(move || {
         App::new()

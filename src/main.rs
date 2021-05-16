@@ -7,6 +7,7 @@ use actix_web::middleware::Logger;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, ResponseError};
 use anyhow::anyhow;
 use log::LevelFilter;
+use serde::Serialize;
 use simplelog::{ConfigBuilder, TermLogger, TerminalMode, ThreadLogMode, WriteLogger};
 use structopt::StructOpt;
 
@@ -38,26 +39,27 @@ pub struct CliCfg {
     proxy_config_path: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ErrWrapper {
-    pub err: anyhow::Error,
+    pub msg: String,
 }
 
 impl From<anyhow::Error> for ErrWrapper {
     fn from(err: anyhow::Error) -> ErrWrapper {
-        ErrWrapper { err }
+        let msg = err.to_string();
+        ErrWrapper { msg }
     }
 }
 
 impl Display for ErrWrapper {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.err)
+        write!(f, "{:?}", self.msg)
     }
 }
 
 impl ResponseError for ErrWrapper {
     fn error_response(&self) -> HttpResponse {
-        HttpResponse::InternalServerError().finish()
+        HttpResponse::InternalServerError().json(self)
     }
 }
 

@@ -13,6 +13,9 @@ use crate::http_utils::Headers;
 use actix_web::http::{HeaderMap, StatusCode};
 use blocking_delay_queue::{BlockingDelayQueue, DelayItem};
 
+type DelayQueue<T> = BlockingDelayQueue<DelayItem<T>>;
+const INSERT_TIMEOUT: Duration = Duration::from_millis(1);
+
 #[derive(Clone)]
 pub struct CachedResponse {
     pub status_code: StatusCode,
@@ -27,7 +30,7 @@ where
     V: Clone + Send + Sync,
 {
     map: Arc<ShardedLock<HashMap<K, V>>>,
-    delay_q: Arc<BlockingDelayQueue<DelayItem<K>>>,
+    delay_q: Arc<DelayQueue<K>>,
     capacity: usize,
 }
 
@@ -97,7 +100,9 @@ where
     V: Clone + Send + Sync + 'static,
 {
     fn new(capacity: usize) -> Result<Self> {
-        let delay_q = Arc::new(BlockingDelayQueue::<DelayItem<K>>::new_with_capacity(capacity));
+        let delay_q = Arc::new(BlockingDelayQueue::<DelayItem<K>>::new_with_capacity(
+            capacity,
+        ));
         let map = Arc::new(ShardedLock::new(HashMap::with_capacity(capacity)));
         Self::run_cache_expire_thread(delay_q.clone(), map.clone())?;
 
@@ -109,11 +114,15 @@ where
     }
 
     fn store(&self, k: K, v: V, ttl: Instant) {
-        let mut guard = self.map.write().expect("Cache map lock poisoned!");
-        if guard.len() < self.capacity {
-            guard.insert(k.clone(), v);
+        let mut cache = self.map.write().expect("Cache map lock poisoned!");
+        if cache.len() < self.capacity {
             // avoid blocking api, len should be same as map
-            self.delay_q.offer(DelayItem::new(k, ttl), Duration::from_millis(5)); // TODO const
+            let success = self
+                .delay_q
+                .offer(DelayItem::new(k.clone(), ttl), INSERT_TIMEOUT);
+            if success {
+                cache.insert(k, v);
+            }
         }
     }
 
@@ -125,20 +134,17 @@ where
             .map_or_else(|| None, |v| Some(v.clone())) // fixme
     }
 
-    #[allow(dead_code)]
-    fn len(&self) -> usize {
-        self.map.read().expect("Cache map lock poisoned!").len()
-    }
-
     fn run_cache_expire_thread(
-        q: Arc<BlockingDelayQueue<DelayItem<K>>>,
+        q: Arc<DelayQueue<K>>,
         map: Arc<ShardedLock<HashMap<K, V>>>,
     ) -> Result<()> {
         thread::Builder::new()
             .name("cache-expire-thread".into())
             .spawn(move || loop {
                 let item = q.take();
-                map.write().expect("Cache map lock poisoned!").remove(&item.data);
+                map.write()
+                    .expect("Cache map lock poisoned!")
+                    .remove(&item.data);
             })?;
         Ok(())
     }
@@ -146,10 +152,21 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::hash::Hash;
     use std::thread;
     use std::time::{Duration, Instant};
 
     use crate::cache::Cache;
+
+    impl<K, V> Cache<K, V>
+    where
+        K: Clone + Ord + Hash + Send + Sync + 'static,
+        V: Clone + Send + Sync + 'static,
+    {
+        fn len(&self) -> usize {
+            self.map.read().expect("Cache map lock poisoned!").len()
+        }
+    }
 
     #[test]
     fn should_expire_value() {

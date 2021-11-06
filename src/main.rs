@@ -17,7 +17,6 @@ use crate::file_watcher::FileWatcher;
 use crate::proxy::Proxy;
 
 mod balancer;
-mod blocking_delay_queue;
 mod cache;
 mod config;
 mod file_watcher;

@@ -9,9 +9,9 @@ use actix_web::{HttpRequest, HttpResponse};
 use anyhow::Result;
 use crossbeam::sync::ShardedLock;
 
-use crate::blocking_delay_queue::BlockingDelayQueue;
 use crate::http_utils::Headers;
 use actix_web::http::{HeaderMap, StatusCode};
+use blocking_delay_queue::{BlockingDelayQueue, DelayItem};
 
 #[derive(Clone)]
 pub struct CachedResponse {
@@ -27,7 +27,7 @@ where
     V: Clone + Send + Sync,
 {
     map: Arc<ShardedLock<HashMap<K, V>>>,
-    delay_q: Arc<BlockingDelayQueue<K>>,
+    delay_q: Arc<BlockingDelayQueue<DelayItem<K>>>,
     capacity: usize,
 }
 
@@ -97,7 +97,7 @@ where
     V: Clone + Send + Sync + 'static,
 {
     fn new(capacity: usize) -> Result<Self> {
-        let delay_q = Arc::new(BlockingDelayQueue::new(capacity));
+        let delay_q = Arc::new(BlockingDelayQueue::<DelayItem<K>>::new_with_capacity(capacity));
         let map = Arc::new(ShardedLock::new(HashMap::with_capacity(capacity)));
         Self::run_cache_expire_thread(delay_q.clone(), map.clone())?;
 
@@ -113,7 +113,7 @@ where
         if guard.len() < self.capacity {
             guard.insert(k.clone(), v);
             // avoid blocking api, len should be same as map
-            self.delay_q.add(k, ttl);
+            self.delay_q.offer(DelayItem::new(k, ttl), Duration::from_millis(5)); // TODO const
         }
     }
 
@@ -131,14 +131,14 @@ where
     }
 
     fn run_cache_expire_thread(
-        q: Arc<BlockingDelayQueue<K>>,
+        q: Arc<BlockingDelayQueue<DelayItem<K>>>,
         map: Arc<ShardedLock<HashMap<K, V>>>,
     ) -> Result<()> {
         thread::Builder::new()
             .name("cache-expire-thread".into())
             .spawn(move || loop {
-                let k = q.take();
-                map.write().expect("Cache map lock poisoned!").remove(&k);
+                let item = q.take();
+                map.write().expect("Cache map lock poisoned!").remove(&item.data);
             })?;
         Ok(())
     }

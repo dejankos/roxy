@@ -18,7 +18,7 @@ inbound:
   - path: /cde/*
     group: group_2
 
-# outbound server groups
+# outbound backup groups
 outbound:
   - group: group_1
     # timeout for all servers in this group

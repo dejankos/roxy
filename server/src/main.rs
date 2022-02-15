@@ -11,19 +11,7 @@ use serde::Serialize;
 use simplelog::{ConfigBuilder, TermLogger, TerminalMode, ThreadLogMode, WriteLogger};
 use structopt::StructOpt;
 
-use crate::balancer::Balancer;
-use crate::config::Configuration;
-use crate::file_watcher::FileWatcher;
-use crate::proxy::Proxy;
 
-mod balancer;
-mod cache;
-mod config;
-mod file_watcher;
-mod http_utils;
-mod matcher;
-mod proxy;
-mod utils;
 
 type Response<T> = Result<T, ErrWrapper>;
 
@@ -65,9 +53,11 @@ impl ResponseError for ErrWrapper {
 async fn proxy_request(
     req: HttpRequest,
     body: web::Bytes,
-    proxy: web::Data<Proxy>,
+    // proxy: web::Data<Proxy>,
 ) -> Response<HttpResponse> {
-    Ok(proxy.proxy(req, body).await?)
+
+    // Ok(proxy.proxy(req, body).await?)
+    Ok(HttpResponse::Ok().finish())
 }
 
 #[actix_web::main]
@@ -76,28 +66,7 @@ async fn main() -> anyhow::Result<()> {
     std::env::set_var("RUST_BACKTRACE", "1");
 
     let cli_cfg = CliCfg::from_args();
-    let configuration = Arc::new(Configuration::new(&cli_cfg.proxy_config_path)?);
-    let service_config = configuration.service_config();
-    init_logger(service_config.log_path, service_config.dev_mode);
-
-    let watcher = FileWatcher::new(&cli_cfg.proxy_config_path);
-    watcher.register_listener(Box::new(configuration.clone()));
-    watcher.watch_file_changes()?;
-
-    let proxy = Proxy::new(Balancer::new(configuration.clone()))?;
-    let data = web::Data::new(proxy);
-    HttpServer::new(move || {
-        App::new()
-            .wrap(Logger::default())
-            .app_data(data.clone())
-            .service(web::resource("/*").to(proxy_request))
-    })
-    .bind(format!("{}:{}", service_config.ip, service_config.port))?
-    .workers(service_config.workers)
-    .shutdown_timeout(10)
-    .run()
-    .await
-    .map_err(|e| anyhow!("Startup failed {}", e))
+    Ok(())
 }
 
 fn init_logger(log_path: Option<String>, dev_mode: bool) {

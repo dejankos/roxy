@@ -1,26 +1,3 @@
-[package]
-name = "roxy"
-version = "0.1.0"
-authors = ["dkos <kosdejan@yahoo.com>"]
-edition = "2018"
-categories = ["reverse proy"]
-description = "Reverse proxy with support for live configuration updates, balancing strategies, ssl and caching."
-exclude = [".gitignore"]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-actix-web =  { version = "3", features = ["openssl"] }
-openssl = "0.10"
-simplelog = "0.7.6"
-log = "0.4.8"
-anyhow = "1"
-serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.8"
-crossbeam = "0.8.0"
-notify = "4.0.15"
-regex = "1.4.4"
-url = "2.2.1"
-structopt = "0.3.21"
-blocking-delay-queue = { git = "https://github.com/dejankos/blocking-delay-queue" }
-
+[workspace]
+members = ["server", "cache"]
+default-members = ["server"]

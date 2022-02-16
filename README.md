@@ -1,4 +1,6 @@
-# Roxy - reverse  proxy (WIP)
+[![Roxy Build](https://github.com/dejankos/roxy/actions/workflows/ci.yml/badge.svg)](https://github.com/dejankos/roxy/actions/workflows/ci.yml)
+
+# Roxy - reverse  proxy (WIP - rewrite)
 Reverse proxy with support for live configuration updates, balancing strategies, ssl and caching.
 
 ## Usage

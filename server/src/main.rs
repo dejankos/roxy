@@ -11,8 +11,6 @@ use serde::Serialize;
 use simplelog::{ConfigBuilder, TermLogger, TerminalMode, ThreadLogMode, WriteLogger};
 use structopt::StructOpt;
 
-
-
 type Response<T> = Result<T, ErrWrapper>;
 
 #[derive(StructOpt, Debug)]
@@ -55,7 +53,6 @@ async fn proxy_request(
     body: web::Bytes,
     // proxy: web::Data<Proxy>,
 ) -> Response<HttpResponse> {
-
     // Ok(proxy.proxy(req, body).await?)
     Ok(HttpResponse::Ok().finish())
 }

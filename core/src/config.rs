@@ -68,7 +68,7 @@ pub struct Configuration {
 #[derive(Debug, Clone)]
 pub struct Group {
     pub servers: Vec<Url>,
-    pub name: Arc<str>,
+    pub name: String,
     pub timeout: Duration,
 }
 

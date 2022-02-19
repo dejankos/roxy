@@ -21,3 +21,5 @@ regex = "1.4.4"
 url = "2.2.1"
 structopt = "0.3.21"
 blocking-delay-queue = { git = "https://github.com/dejankos/blocking-delay-queue" }
+cache = { path = "../cache" }
+core = { path = "../core" }

@@ -1,13 +1,13 @@
 use std::collections::HashMap;
+
 use std::time::{Duration, Instant};
 
 use actix_web::http::{HeaderMap, StatusCode};
 use actix_web::web::Bytes;
 use blocking_delay_queue::{BlockingDelayQueue, DelayItem};
-use crossbeam::sync::ShardedLock;
+use crossbeam::sync::{ShardedLock, ShardedLockWriteGuard};
 
 const INSERT_TIMEOUT: Duration = Duration::from_millis(1);
-const POLL_TIMEOUT: Duration = Duration::from_nanos(1);
 
 #[derive(Clone)]
 pub struct CachedResponse {
@@ -26,14 +26,23 @@ pub trait ExpiringCache {
     fn put(&self, k: Self::K, v: Self::V, ttl: Instant) -> bool;
 
     fn get(&self, k: Self::K) -> Option<Self::V>;
-
-    fn expire(&self);
 }
 
-struct ResponseCache<'a> {
+pub struct ResponseCache<'a> {
     cache: ShardedLock<HashMap<&'a str, CachedResponse>>,
     expire_q: BlockingDelayQueue<DelayItem<&'a str>>,
     capacity: usize,
+}
+
+impl<'a> ResponseCache<'a> {
+    fn expire_head(&self) {
+        let item = self.expire_q.take();
+        self.cache_write_lock().remove(item.data);
+    }
+
+    fn cache_write_lock(&self) -> ShardedLockWriteGuard<'_, HashMap<&'a str, CachedResponse>> {
+        self.cache.write().expect("Cache write lock poisoned!")
+    }
 }
 
 impl<'a> ExpiringCache for ResponseCache<'a> {
@@ -41,15 +50,16 @@ impl<'a> ExpiringCache for ResponseCache<'a> {
     type V = CachedResponse;
 
     fn with_capacity(capacity: usize) -> Self {
-        ResponseCache {
+        let cache = ResponseCache {
             cache: ShardedLock::new(HashMap::new()),
             expire_q: BlockingDelayQueue::new_with_capacity(capacity),
             capacity,
-        }
+        };
+        cache
     }
 
     fn put(&self, k: Self::K, v: Self::V, ttl: Instant) -> bool {
-        let mut cache = self.cache.write().expect("Cache write lock poisoned!");
+        let mut cache = self.cache_write_lock();
         if cache.len() < self.capacity {
             // avoid blocking api, len should be same as map
             let success = self.expire_q.offer(DelayItem::new(k, ttl), INSERT_TIMEOUT);
@@ -69,24 +79,11 @@ impl<'a> ExpiringCache for ResponseCache<'a> {
             .get(k)
             .map_or_else(|| None, |v| Some(v.clone()))
     }
-
-    fn expire(&self) {
-        let mut expired = vec![];
-        while let Some(v) = self.expire_q.poll(POLL_TIMEOUT) {
-            expired.push(v.data)
-        }
-
-        if !expired.is_empty() {
-            let mut lock = self.cache.write().expect("Cache write lock poisoned");
-            expired.into_iter().for_each(|e| {
-                lock.remove(e);
-            });
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
+    
     use std::thread;
     use std::time::{Duration, Instant};
 
@@ -109,7 +106,7 @@ mod tests {
         cache.put("1", dummy_resp(), Instant::now() + ttl);
         assert!(cache.get("1").is_some());
         thread::sleep(ttl);
-        cache.expire();
+        cache.expire_head();
         assert!(cache.get("1").is_none());
     }
 

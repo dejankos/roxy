@@ -15,5 +15,7 @@ serde_yaml = "0.8"
 url = "2.2.1"
 notify = "4.0.15"
 regex = "1.4.4"
+actix-web =  { version = "3", features = ["openssl"] }
+openssl = "0.10"
 
 cache = { path = "../cache" }

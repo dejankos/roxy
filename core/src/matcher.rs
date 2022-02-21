@@ -23,14 +23,13 @@ pub struct Matcher {
     group: Group,
 }
 
-
 impl PathMatcher {
-    pub fn new(config: & ProxyProperties) -> Result<Self> {
+    pub fn new(config: &ProxyProperties) -> Result<Self> {
         let matchers = Self::create_path_matchers(config)?;
         Ok(PathMatcher { matchers })
     }
 
-    pub fn rebuild(&mut self, config: & ProxyProperties) -> Result<()> {
+    pub fn rebuild(&mut self, config: &ProxyProperties) -> Result<()> {
         self.matchers = Self::create_path_matchers(config)?;
         Ok(())
     }
@@ -50,48 +49,34 @@ impl PathMatcher {
             .find(|m| m.regex.is_match(req_path))
     }
 
-
-    fn create_path_matchers(props:  &ProxyProperties) -> Result<Vec<Matcher>> {
+    fn create_path_matchers(props: &ProxyProperties) -> Result<Vec<Matcher>> {
         let lookup = props
             .outbound
             .iter()
             .map(|o| (o.group.as_str(), o))
             .collect::<HashMap<&str, &Outbound>>();
 
-        Ok(
-            props
-                .inbound
-                .iter()
-                .filter_map(|i| {
-                    Self::create_matcher(
-                        i.group.as_str(),
-                        lookup.get(i.group.as_str())
-                    ).ok()
-                })
-                .collect())
+        Ok(props
+            .inbound
+            .iter()
+            .filter_map(|i| {
+                Self::create_matcher(i.group.as_str(), lookup.get(i.group.as_str())).ok()
+            })
+            .collect())
     }
-
 
     fn create_matcher(path: &str, outbound: Option<&&Outbound>) -> Result<Matcher> {
         if let Some(out) = outbound {
             let regex = Regex::new(&path)?;
-            if let Some(group)= Self::convert_to_group(path, out) {
-                Ok(
-                    Matcher {
-                        regex,
-                        group
-                    }
-                )
-            }
-            else {
+            if let Some(group) = Self::convert_to_group(path, out) {
+                Ok(Matcher { regex, group })
+            } else {
                 bail!("Matching group for request path {path} not found")
             }
-        }
-        else {
+        } else {
             bail!("Matching group for request path {path} doesn't contain any servers")
         }
     }
-
 
     fn convert_to_group(group: &str, outbound: &Outbound) -> Option<Group> {
         let servers = outbound

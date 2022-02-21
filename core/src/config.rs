@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+
 use std::time::Duration;
 
 use anyhow::Result;
@@ -87,8 +87,8 @@ impl FileName for &PathBuf {
 
 impl Configuration {
     pub fn new<P>(path: P) -> Result<Self>
-        where
-            P: AsRef<Path>,
+    where
+        P: AsRef<Path>,
     {
         let props = yaml_to_struct(&path)?;
         debug!("Loaded props {:?}", &props);
@@ -159,7 +159,7 @@ impl Configuration {
     }
 }
 
-impl FileListener for Arc<Configuration> {
+impl FileListener for Configuration {
     fn notify_file_changed(&self, path: &Path) {
         if !self.interested(path.to_string_lossy().as_ref()) {
             return;

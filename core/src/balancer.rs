@@ -7,7 +7,7 @@ use anyhow::Result;
 use crossbeam::sync::ShardedLock;
 use url::Url;
 
-use crate::config::{Configuration};
+use crate::config::Configuration;
 
 pub struct Balancer {
     config: Configuration,

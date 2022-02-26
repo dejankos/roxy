@@ -33,6 +33,12 @@ pub struct ResponseCache {
     capacity: usize,
 }
 
+impl CachedResponse {
+    pub fn expired(&self) -> bool {
+        self.ttl < Instant::now()
+    }
+}
+
 impl ResponseCache {
     pub fn with_capacity(capacity: usize) -> Self {
         let cache = ResponseCache {
@@ -57,12 +63,13 @@ impl ExpiringCache for ResponseCache {
     type K = Rc<str>;
     type V = CachedResponse;
 
-
     fn put(&self, k: Self::K, v: Self::V, ttl: Instant) -> bool {
         let mut cache = self.cache_write_lock();
         if cache.len() < self.capacity {
             // avoid blocking api, len should be same as map
-            let success = self.expire_q.offer(DelayItem::new(k.clone(), ttl), INSERT_TIMEOUT);
+            let success = self
+                .expire_q
+                .offer(DelayItem::new(k.clone(), ttl), INSERT_TIMEOUT);
             if success {
                 cache.insert(k, v);
             }
@@ -86,9 +93,10 @@ mod tests {
     use std::rc::Rc;
     use std::thread;
     use std::time::{Duration, Instant};
+    use actix_web::http::StatusCode;
 
-    use actix_web::http::{HeaderMap, StatusCode};
     use actix_web::web::Bytes;
+    use awc::http::HeaderMap;
 
     use crate::expiring_cache::ResponseCache;
     use crate::{CachedResponse, ExpiringCache};

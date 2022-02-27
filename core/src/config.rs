@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use std::time::Duration;
 
@@ -159,7 +160,7 @@ impl Configuration {
     }
 }
 
-impl FileListener for Configuration {
+impl FileListener for Arc<Configuration> {
     fn notify_file_changed(&self, path: &Path) {
         if !self.interested(path.to_string_lossy().as_ref()) {
             return;

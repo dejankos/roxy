@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use std::time::Duration;
 
@@ -10,7 +11,7 @@ use url::Url;
 use crate::config::Configuration;
 
 pub struct Balancer {
-    config: Configuration,
+    config: Arc<Configuration>,
     distributions: ShardedLock<HashMap<String, usize>>,
 }
 
@@ -21,7 +22,7 @@ pub struct Instance {
 }
 
 impl Balancer {
-    pub fn new(config: Configuration) -> Self {
+    pub fn new(config: Arc<Configuration>) -> Self {
         let distributions = ShardedLock::new(HashMap::new());
         Balancer {
             config,

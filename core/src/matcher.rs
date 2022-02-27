@@ -60,7 +60,7 @@ impl PathMatcher {
             .inbound
             .iter()
             .filter_map(|i| {
-                Self::create_matcher(i.group.as_str(), lookup.get(i.group.as_str())).ok()
+                Self::create_matcher(i.path.as_str(), lookup.get(i.group.as_str())).ok()
             })
             .collect())
     }

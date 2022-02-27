@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::thread;
 use std::time::{Duration, Instant};
 
 use actix_web::client::{Client, ClientRequest};
@@ -12,7 +13,7 @@ use anyhow::Result;
 
 use log::debug;
 
-use cache::{CachedResponse, ExpiringCache, ResponseCache};
+use cache::{CachedResponse, ResponseCache};
 use url::Url;
 
 use crate::balancer::{Balancer, Instance};
@@ -22,7 +23,7 @@ use crate::http_utils::{get_host, Cacheable, Headers, XFF_HEADER_NAME};
 
 pub struct Proxy {
     balancer: Balancer,
-    res_cache: ResponseCache,
+    res_cache: Arc<ResponseCache>,
 }
 
 trait ProxyHeaders {
@@ -53,11 +54,13 @@ impl ProxyHeaders for ClientRequest {
 
 impl Proxy {
     pub fn new(balancer: Balancer) -> Result<Self> {
-        let res_cache = ResponseCache::with_capacity(10_000);
-        Ok(Proxy {
+        let res_cache = Arc::new(ResponseCache::with_capacity(10_000));
+        let proxy = Proxy {
             balancer,
             res_cache,
-        })
+        };
+        proxy.run_expire();
+        Ok(proxy)
     }
 
     pub async fn proxy(&self, req: HttpRequest, body: Bytes) -> Result<HttpResponse> {
@@ -78,7 +81,7 @@ impl Proxy {
         Ok(res)
     }
 
-    fn cache_read(&self, key: Rc<str>) -> Option<HttpResponse> {
+    fn cache_read(&self, key: Arc<str>) -> Option<HttpResponse> {
         if let Some(res) = self.res_cache.get(key.clone()) {
             if res.expired() {
                 None
@@ -92,7 +95,7 @@ impl Proxy {
         }
     }
 
-    fn cache_write(&self, key: Rc<str>, res: &HttpResponse, body: Bytes) {
+    fn cache_write(&self, key: Arc<str>, res: &HttpResponse, body: Bytes) {
         if res.status() != StatusCode::OK {
             return;
         }
@@ -138,6 +141,16 @@ impl Proxy {
         Ok((resp_builder, bytes))
     }
 
+    fn run_expire(&self) {
+        let cache = self.res_cache.clone();
+        thread::Builder::new()
+            .name("expire-items-thread".into())
+            .spawn(move || loop {
+                cache.expire_head();
+            })
+            .expect("Failed to spawn expiring cache thread");
+    }
+
     fn create_proxy_uri(url: Url, path: &str, query_string: &str) -> Result<Uri> {
         let mut url = url;
         url.set_path(format!("{}{}", &url.path()[1..], path).as_str());
@@ -152,8 +165,8 @@ impl Proxy {
         Client::builder().timeout(timeout).finish()
     }
 
-    fn build_cache_key(req: &HttpRequest) -> Rc<str> {
-        Rc::from(req.uri().to_string().as_str())
+    fn build_cache_key(req: &HttpRequest) -> Arc<str> {
+        Arc::from(req.uri().to_string().as_str())
     }
 
     // fn create_http_client(scheme: &str, timeout: Duration) -> Result<Client> {

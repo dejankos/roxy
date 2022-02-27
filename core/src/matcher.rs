@@ -36,16 +36,15 @@ impl PathMatcher {
 
     pub fn find_group(&self, req_path: &str) -> Result<Group> {
         if let Some(found) = self.find_matching_group(req_path) {
-            Ok(found.group)
+            Ok(found.group.clone())
         } else {
             bail!("Matching group for request path {} not found", req_path)
         }
     }
 
-    fn find_matching_group(&self, req_path: &str) -> Option<Matcher> {
+    fn find_matching_group(&self, req_path: &str) -> Option<&Matcher> {
         self.matchers
             .iter()
-            .cloned()
             .find(|m| m.regex.is_match(req_path))
     }
 

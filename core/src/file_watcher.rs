@@ -1,13 +1,14 @@
-use crossbeam::sync::ShardedLock;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::sync::Arc;
-use std::thread;
 use std::time::Duration;
 
 use anyhow::Result;
+use crossbeam::sync::ShardedLock;
 use log::error;
 use notify::{watcher, DebouncedEvent, RecursiveMode, Watcher};
+
+use crate::task::spawn;
 
 type Listener = Box<dyn FileListener + Sync + Send>;
 type Listeners = Arc<ShardedLock<Vec<Listener>>>;
@@ -42,13 +43,14 @@ impl FileWatcher {
     pub fn watch_file_changes(&self) -> Result<()> {
         let path = self.path.clone();
         let listeners = self.listeners.clone();
-        thread::Builder::new()
-            .name("file-watch-thread".into())
-            .spawn(move || {
+        spawn(
+            move || {
                 if let Err(e) = run_event_loop(&path, listeners) {
                     error!("Error watching files on path {:?}. Error = {}", &path, e);
                 }
-            })?;
+            },
+            "file-watch-thread".into(),
+        )?;
         Ok(())
     }
 }

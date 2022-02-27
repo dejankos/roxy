@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
-use std::thread;
+
 use std::time::{Duration, Instant};
 
 use actix_web::client::{Client, ClientRequest};
@@ -10,14 +10,14 @@ use actix_web::web::Bytes;
 use actix_web::{HttpRequest, HttpResponse};
 use anyhow::anyhow;
 use anyhow::Result;
-
 use log::debug;
+use url::Url;
 
 use cache::{CachedResponse, ResponseCache};
-use url::Url;
 
 use crate::balancer::{Balancer, Instance};
 use crate::http_utils::{get_host, Cacheable, Headers, XFF_HEADER_NAME};
+use crate::task::spawn;
 
 // const HTTPS_SCHEME: &str = "https";
 
@@ -143,12 +143,13 @@ impl Proxy {
 
     fn run_expire(&self) {
         let cache = self.res_cache.clone();
-        thread::Builder::new()
-            .name("expire-items-thread".into())
-            .spawn(move || loop {
+        spawn(
+            move || loop {
                 cache.expire_head();
-            })
-            .expect("Failed to spawn expiring cache thread");
+            },
+            "expire-items-thread".into(),
+        )
+        .expect("Failed to spawn expiring cache thread");
     }
 
     fn create_proxy_uri(url: Url, path: &str, query_string: &str) -> Result<Uri> {

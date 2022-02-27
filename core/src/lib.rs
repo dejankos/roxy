@@ -6,6 +6,7 @@ mod log;
 mod matcher;
 mod proxy;
 mod yaml_utils;
+mod task;
 
 pub use self::balancer::Balancer;
 pub use self::config::Configuration;

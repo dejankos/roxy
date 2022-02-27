@@ -96,7 +96,7 @@ mod tests {
     fn should_expire_value() {
         let ttl = Duration::from_millis(50);
         let cache = ResponseCache::with_capacity(1);
-        let key = Arc::from("1");
+        let key: Arc<str> = Arc::from("1");
         cache.put(key.clone(), dummy_resp(), Instant::now() + ttl);
         assert!(cache.get(key.clone()).is_some());
         thread::sleep(ttl);
@@ -108,8 +108,8 @@ mod tests {
     fn should_not_block_when_capacity_is_reached() {
         let ttl = Instant::now() + Duration::from_millis(50);
         let cache = ResponseCache::with_capacity(1);
-        let first_key = Arc::from("1");
-        let second_key = Arc::from("2");
+        let first_key: Arc<str> = Arc::from("1");
+        let second_key : Arc<str>= Arc::from("2");
         let first = cache.put(first_key.clone(), dummy_resp(), ttl);
         let second = cache.put(second_key.clone(), dummy_resp(), ttl);
         assert_eq!(1, cache.len());

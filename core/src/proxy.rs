@@ -82,7 +82,7 @@ impl Proxy {
     }
 
     fn cache_read(&self, key: Arc<str>) -> Option<HttpResponse> {
-        if let Some(res) = self.res_cache.get(key.clone()) {
+        if let Some(res) = self.res_cache.get(key) {
             if res.expired() {
                 None
             } else {

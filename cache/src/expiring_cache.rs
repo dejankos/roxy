@@ -32,12 +32,11 @@ impl CachedResponse {
 
 impl ResponseCache {
     pub fn with_capacity(capacity: usize) -> Self {
-        let cache = ResponseCache {
+         ResponseCache {
             cache: ShardedLock::new(HashMap::new()),
             expire_q: BlockingDelayQueue::new_with_capacity(capacity),
             capacity,
-        };
-        cache
+        }
     }
 
     pub fn expire_head(&self) {

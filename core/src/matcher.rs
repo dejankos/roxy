@@ -66,7 +66,7 @@ impl PathMatcher {
 
     fn create_matcher(path: &str, outbound: Option<&&Outbound>) -> Result<Matcher> {
         if let Some(out) = outbound {
-            let regex = Regex::new(&path)?;
+            let regex = Regex::new(path)?;
             if let Some(group) = Self::convert_to_group(path, out) {
                 Ok(Matcher { regex, group })
             } else {

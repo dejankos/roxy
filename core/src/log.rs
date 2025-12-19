@@ -1,5 +1,5 @@
 use log::LevelFilter;
-use simplelog::{ConfigBuilder, TermLogger, TerminalMode, ThreadLogMode, WriteLogger};
+use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode, ThreadLogMode, WriteLogger};
 use std::fs::File;
 
 pub fn init_logger(log_path: Option<String>, dev_mode: bool) {
@@ -8,7 +8,7 @@ pub fn init_logger(log_path: Option<String>, dev_mode: bool) {
         .build();
 
     if log_path.is_none() || dev_mode {
-        TermLogger::init(LevelFilter::Info, cfg, TerminalMode::Mixed)
+        TermLogger::init(LevelFilter::Info, cfg, TerminalMode::Mixed, ColorChoice::Auto)
             .expect("Failed to init term logger");
     } else {
         let log_file =

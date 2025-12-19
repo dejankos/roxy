@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use std::time::Duration;
@@ -24,6 +24,16 @@ pub struct Service {
     pub dev_mode: bool,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct SslConfig {
+    #[serde(default = "default_ssl_verify")]
+    pub verify_ssl: bool,
+}
+
+fn default_ssl_verify() -> bool {
+    true
+}
+
 impl Default for Service {
     fn default() -> Self {
         Service {
@@ -39,6 +49,8 @@ impl Default for Service {
 #[derive(Debug, Deserialize)]
 pub struct ProxyProperties {
     pub service: Service,
+    #[serde(default)]
+    pub ssl: Option<SslConfig>,
     pub inbound: Vec<Inbound>,
     pub outbound: Vec<Outbound>,
 }
@@ -73,18 +85,6 @@ pub struct Group {
     pub timeout: Duration,
 }
 
-trait FileName {
-    fn file_name_to_str(&self) -> &str;
-}
-
-impl FileName for &PathBuf {
-    fn file_name_to_str(&self) -> &str {
-        self.file_name()
-            .as_ref()
-            .and_then(|os_str| os_str.to_str())
-            .unwrap_or("")
-    }
-}
 
 impl Configuration {
     pub fn new<P>(path: P) -> Result<Self>
@@ -116,6 +116,15 @@ impl Configuration {
             .expect("proxy config read lock poisoned!")
             .props
             .service
+            .clone()
+    }
+
+    pub fn ssl_config(&self) -> Option<SslConfig> {
+        self.proxy_config
+            .read()
+            .expect("proxy config read lock poisoned!")
+            .props
+            .ssl
             .clone()
     }
 

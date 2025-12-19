@@ -9,7 +9,7 @@ mod yaml_utils;
 mod task;
 
 pub use self::balancer::Balancer;
-pub use self::config::Configuration;
+pub use self::config::{Configuration, SslConfig};
 pub use self::file_watcher::FileWatcher;
 pub use self::log::init_logger;
 pub use self::proxy::Proxy;

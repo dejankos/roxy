@@ -9,7 +9,7 @@ use anyhow::anyhow;
 
 use serde::Serialize;
 
-use structopt::StructOpt;
+use clap::Parser;
 
 use core::init_logger;
 use core::Balancer;
@@ -19,9 +19,11 @@ use core::Proxy;
 
 type Response<T> = Result<T, ErrWrapper>;
 
-#[derive(StructOpt, Debug)]
+#[derive(Parser, Debug)]
+#[command(name = "roxy")]
+#[command(about = "Reverse proxy with live configuration updates")]
 pub struct CliCfg {
-    #[structopt(
+    #[arg(
         short,
         long,
         help = "Proxy configuration file",
@@ -67,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
     std::env::set_var("RUST_LOG", "actix_web=debug");
     std::env::set_var("RUST_BACKTRACE", "1");
 
-    let cli_cfg = CliCfg::from_args();
+    let cli_cfg = CliCfg::parse();
     let configuration = Arc::new(Configuration::new(&cli_cfg.proxy_config_path)?);
     let service_config = configuration.service_config();
     init_logger(service_config.log_path, service_config.dev_mode);
@@ -76,13 +78,14 @@ async fn main() -> anyhow::Result<()> {
     watcher.register_listener(Box::new(configuration.clone()));
     watcher.watch_file_changes()?;
 
-    let proxy = Proxy::new(Balancer::new(configuration.clone()))?;
+    let ssl_config = configuration.ssl_config();
+    let proxy = Proxy::new(Balancer::new(configuration.clone()), ssl_config)?;
     let data = web::Data::new(proxy);
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
             .app_data(data.clone())
-            .service(web::resource("/*").to(proxy_request))
+            .service(web::resource("/{tail:.*}").to(proxy_request))
     })
     .bind(format!("{}:{}", service_config.ip, service_config.port))?
     .workers(service_config.workers)

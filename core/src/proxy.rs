@@ -3,27 +3,29 @@ use std::sync::Arc;
 
 use std::time::{Duration, Instant};
 
-use actix_web::client::{Client, ClientRequest};
-use actix_web::dev::{HttpResponseBuilder, RequestHead};
+use actix_web::dev::RequestHead;
+use actix_web::HttpResponseBuilder;
 use actix_web::http::{StatusCode, Uri};
 use actix_web::web::Bytes;
 use actix_web::{HttpRequest, HttpResponse};
 use anyhow::anyhow;
 use anyhow::Result;
+use awc::{Client, ClientRequest, Connector};
 use log::debug;
+use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
 use url::Url;
 
 use cache::{CachedResponse, ResponseCache};
 
 use crate::balancer::{Balancer, Instance};
+use crate::config::SslConfig;
 use crate::http_utils::{get_host, Cacheable, Headers, XFF_HEADER_NAME};
 use crate::task::spawn;
-
-// const HTTPS_SCHEME: &str = "https";
 
 pub struct Proxy {
     balancer: Balancer,
     res_cache: Arc<ResponseCache>,
+    ssl_config: Option<SslConfig>,
 }
 
 trait ProxyHeaders {
@@ -43,7 +45,7 @@ impl ProxyHeaders for ClientRequest {
         }
         xff_value.push_str(get_host(req_from).as_str());
 
-        self.set_header(XFF_HEADER_NAME, xff_value)
+        self.insert_header((XFF_HEADER_NAME, xff_value))
     }
 
     fn clear_headers(mut self) -> Self {
@@ -53,11 +55,12 @@ impl ProxyHeaders for ClientRequest {
 }
 
 impl Proxy {
-    pub fn new(balancer: Balancer) -> Result<Self> {
+    pub fn new(balancer: Balancer, ssl_config: Option<SslConfig>) -> Result<Self> {
         let res_cache = Arc::new(ResponseCache::with_capacity(10_000));
         let proxy = Proxy {
             balancer,
             res_cache,
+            ssl_config,
         };
         proxy.run_expire();
         Ok(proxy)
@@ -73,7 +76,7 @@ impl Proxy {
         }
 
         let instance = self.balancer.balance(&req).await?;
-        let (mut resp_builder, bytes) = Self::send(instance, req.head(), &req, body).await?;
+        let (mut resp_builder, bytes) = self.send(instance, req.head(), &req, body).await?;
         let res = resp_builder.body(bytes.clone());
         if req_cacheable {
             self.cache_write(key, &res, bytes);
@@ -119,6 +122,7 @@ impl Proxy {
     }
 
     async fn send(
+        &self,
         instance: Instance,
         req_head: &RequestHead,
         req: &HttpRequest,
@@ -127,7 +131,7 @@ impl Proxy {
         let proxy_uri = Self::create_proxy_uri(instance.url, req.path(), req.query_string())?;
 
         debug!("proxying to {}", &proxy_uri);
-        let mut response = Self::create_http_client(instance.timeout)
+        let mut response = self.create_http_client(instance.timeout)?
             .request_from(proxy_uri, req_head)
             .append_proxy_headers(req)
             .clear_headers()
@@ -162,28 +166,28 @@ impl Proxy {
         Ok(Uri::try_from(url.as_str())?)
     }
 
-    fn create_http_client(timeout: Duration) -> Client {
-        Client::builder().timeout(timeout).finish()
+    fn create_http_client(&self, timeout: Duration) -> Result<Client> {
+        let mut ssl_connector_builder = SslConnector::builder(SslMethod::tls())?;
+
+        // Configure SSL verification based on config
+        if let Some(ssl_config) = &self.ssl_config {
+            if !ssl_config.verify_ssl {
+                ssl_connector_builder.set_verify(SslVerifyMode::NONE);
+                debug!("SSL verification disabled");
+            }
+        }
+
+        let connector = Connector::new()
+            .openssl(ssl_connector_builder.build())
+            .timeout(timeout);
+
+        Ok(Client::builder()
+            .connector(connector)
+            .timeout(timeout)
+            .finish())
     }
 
     fn build_cache_key(req: &HttpRequest) -> Arc<str> {
         Arc::from(req.uri().to_string().as_str())
     }
-
-    // fn create_http_client(scheme: &str, timeout: Duration) -> Result<Client> {
-    //     if scheme == HTTPS_SCHEME {
-    //         let ssl_connector = SslConnector::builder(SslMethod::tls())?.build();
-    //         let connector = Connector::new()
-    //             .ssl(ssl_connector)
-    //             .timeout(timeout)
-    //             .finish();
-    //
-    //         Ok(Client::builder()
-    //             .connector(connector)
-    //             .timeout(timeout)
-    //             .finish())
-    //     } else {
-    //     Ok(Client::builder().timeout(timeout).finish())
-    //     }
-    // }
 }

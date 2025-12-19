@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use std::time::{Duration, Instant};
 
-use actix_web::http::{HeaderMap, StatusCode};
+use actix_web::http::{StatusCode, header::HeaderMap};
 use actix_web::web::Bytes;
 use blocking_delay_queue::{BlockingDelayQueue, DelayItem};
 use crossbeam::sync::{ShardedLock, ShardedLockWriteGuard};
@@ -75,7 +75,7 @@ impl ResponseCache {
 
 #[cfg(test)]
 mod tests {
-    use actix_web::http::{HeaderMap, StatusCode};
+    use actix_web::http::{StatusCode, header::HeaderMap};
     use std::sync::Arc;
     use std::thread;
     use std::time::{Duration, Instant};

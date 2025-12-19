@@ -8,18 +8,19 @@ description = "Reverse proxy with support for live configuration updates, balanc
 exclude = [".gitignore"]
 
 [dependencies]
-actix-web =  { version = "3", features = ["openssl"] }
+actix-web =  { version = "4", features = ["openssl"] }
+awc = { version = "3", features = ["openssl"] }
 openssl = "0.10"
-simplelog = "0.7.6"
-log = "0.4.8"
+simplelog = "0.12"
+log = "0.4"
 anyhow = "1"
 serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.8"
-crossbeam = "0.8.0"
-notify = "4.0.15"
-regex = "1.4.4"
-url = "2.2.1"
-structopt = "0.3.21"
+serde_yaml = "0.9"
+crossbeam = "0.8"
+notify = "6.1"
+regex = "1"
+url = "2"
+clap = { version = "4", features = ["derive"] }
 blocking-delay-queue = { git = "https://github.com/dejankos/blocking-delay-queue" }
 cache = { path = "../cache" }
 core = { path = "../core" }

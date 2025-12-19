@@ -9,6 +9,12 @@ service:
   # dev mode - will enable only terminal logger
   dev_mode: true
 
+# ssl configuration (optional)
+ssl:
+  # verify SSL certificates for backend HTTPS connections
+  # set to false to allow self-signed certificates (not recommended for production)
+  verify_ssl: true
+
 # inbound paths
 inbound:
   # match path to group

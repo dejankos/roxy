@@ -19,7 +19,7 @@ OPTIONS:
 ```
 
 ## Proxy Configuration
-```
+```yaml
 # service configuration
 service:
   # ip address
@@ -30,6 +30,12 @@ service:
   workers: 6
   # dev mode - will enable only terminal logger
   dev_mode: true
+
+# ssl configuration (optional)
+ssl:
+  # verify SSL certificates for backend HTTPS connections
+  # set to false to allow self-signed certificates (not recommended for production)
+  verify_ssl: true
 
 # inbound paths
 inbound:
@@ -47,13 +53,23 @@ outbound:
     timeout: 60
     # backend servers for this group
     # round robin balancing to all servers
+    # supports both HTTP and HTTPS backends
     servers:
       - http://localhost:8080/push
+      - https://secure.backend.example.com
   - group: group_2
     servers:
       - http://test:8082
       - http://test2:8181/test
 ```
+
+## Features
+
+- **Live Configuration Updates**: Modify `proxy.yaml` and changes are applied automatically without restart
+- **Load Balancing**: Round-robin distribution across multiple backend servers
+- **HTTPS Support**: Proxy to HTTPS backends with configurable SSL verification
+- **Response Caching**: Caches responses based on Cache-Control headers
+- **Request Forwarding**: Preserves and adds X-Forwarded-For headers
 
 ## Build from source
 ### Install Rust

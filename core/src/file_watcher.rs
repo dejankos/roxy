@@ -6,7 +6,7 @@ use std::time::Duration;
 use anyhow::Result;
 use crossbeam::sync::ShardedLock;
 use log::error;
-use notify::{watcher, DebouncedEvent, RecursiveMode, Watcher};
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
 use crate::task::spawn;
 
@@ -57,24 +57,35 @@ impl FileWatcher {
 
 fn run_event_loop(path: &Path, listeners: Listeners) -> Result<()> {
     let (tx, rx) = channel();
-    let mut watcher = watcher(tx, Duration::from_secs(5))?;
+
+    let mut watcher = RecommendedWatcher::new(
+        move |res: Result<Event, notify::Error>| {
+            if let Ok(event) = res {
+                let _ = tx.send(event);
+            }
+        },
+        Config::default().with_poll_interval(Duration::from_secs(5)),
+    )?;
+
     watcher.watch(path, RecursiveMode::NonRecursive)?;
 
+    // Keep watcher alive in the loop
     loop {
         match rx.recv() {
-            Ok(event) => match event {
-                DebouncedEvent::Write(ref p) => listeners
-                    .read()
-                    .expect("listener mutex poisoned!")
-                    .iter()
-                    .for_each(|l| l.notify_file_changed(p)),
-                DebouncedEvent::Error(e, o) => {
-                    error!("Path {:?} watch error {}.", o, e);
+            Ok(event) => {
+                if matches!(event.kind, EventKind::Modify(_)) {
+                    for path in event.paths {
+                        listeners
+                            .read()
+                            .expect("listener mutex poisoned!")
+                            .iter()
+                            .for_each(|l| l.notify_file_changed(&path));
+                    }
                 }
-                _ => {}
-            },
+            }
             Err(e) => {
                 error!("Error receiving file events - stopping file watch! {}", e);
+                drop(watcher); // Explicitly drop watcher before breaking
                 break;
             }
         }
